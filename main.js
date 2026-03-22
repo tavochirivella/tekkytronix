@@ -7,11 +7,13 @@ const ITEM_VISUALS = {
   robots:  { red: '🔴', blue: '🔵', yellow: '🟡', purple: '🟣' }
 };
 
-let _currentLevel   = null;
-let _slots          = [];   // [{ el, itemId, itemData, prefilled }]
-let _categories     = {};   // { catId: [itemId, ...] }
-let _draggedItemId  = null;
-let _draggedFromCat = null;
+let _currentLevel    = null;
+let _slots           = [];   // [{ el, itemId, itemData, prefilled }]
+let _categories      = {};   // { catId: [itemId, ...] }
+let _draggedItemId   = null;
+let _draggedFromCat  = null;
+let _attemptTimes    = [];   // ms por cada intento
+let _attemptStart    = null; // timestamp del inicio del intento actual
 
 // ===== INIT =====
 function init() {
@@ -126,11 +128,13 @@ function _loadLevel(levelId) {
   const level = LevelRepository.getById(levelId);
   if (!level) { FeedbackController.showMessage('Error cargando nivel', 'error'); return; }
 
-  _currentLevel  = level;
-  _slots         = [];
-  _categories    = {};
-  _draggedItemId = null;
+  _currentLevel   = level;
+  _slots          = [];
+  _categories     = {};
+  _draggedItemId  = null;
   _draggedFromCat = null;
+  _attemptTimes   = [];
+  _attemptStart   = Date.now();
 
   GameStateManager.resetForLevel(levelId);
   HUD.resetTimer();
@@ -163,13 +167,18 @@ function _renderLevel(level) {
 
 // ─── PATRÓN ───────────────────────────────────────────────
 function _renderPatternLevel(level, body) {
+  const hasDistractors = level.availableItems.some(i => i.distractor);
+  const bankLabel = hasDistractors
+    ? 'Elementos disponibles — <em>usa solo los que necesitas:</em>'
+    : 'Elementos disponibles:';
+
   body.innerHTML = `
     <section class="level__slots-section">
       <p class="level__instruction">Completa el patrón — arrastra los elementos a los espacios vacíos:</p>
       <div id="slots-container" class="slots-container"></div>
     </section>
     <section class="level__items-section">
-      <p class="level__instruction">Elementos disponibles:</p>
+      <p class="level__instruction">${bankLabel}</p>
       <div id="items-container" class="items-container"></div>
     </section>
   `;
@@ -510,6 +519,12 @@ function _clearHighlights() {
 // ─── CHECK ────────────────────────────────────────────────
 function _check() {
   const level = _currentLevel;
+
+  // Registrar tiempo de este intento
+  const now = Date.now();
+  if (_attemptStart) _attemptTimes.push(now - _attemptStart);
+  _attemptStart = now;
+
   GameStateManager.incrementAttempts();
   const attempts = GameStateManager.get('attempts');
   HUD.setAttempts(attempts);
@@ -599,12 +614,21 @@ function _showErrorHint(errorType) {
 
 // ─── FEEDBACK SCREEN ──────────────────────────────────────
 function _showFeedbackScreen(attempts, elapsed, hasNext) {
-  const state          = GameStateManager.get();
-  const totalRepaired  = state.totalRepaired;
+  const state           = GameStateManager.get();
+  const totalRepaired   = state.totalRepaired;
   const sessionRepaired = state.sessionRepaired;
 
-  document.getElementById('feedback-stats').textContent =
-    `Intentos: ${attempts} · Tiempo: ${Helpers.formatTime(elapsed)}`;
+  // Métricas de tiempo por intento
+  const times    = _attemptTimes;
+  const fastest  = times.length ? Math.min(...times) : elapsed;
+  const slowest  = times.length ? Math.max(...times) : elapsed;
+  const avgMs    = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : elapsed;
+
+  let statsHtml = `Tiempo total: <strong>${Helpers.formatTime(elapsed)}</strong> · Intentos: <strong>${attempts}</strong>`;
+  if (attempts > 1) {
+    statsHtml += `<br><small>Más rápido: ${Helpers.formatTime(fastest)} · Promedio por intento: ${Helpers.formatTime(avgMs)}</small>`;
+  }
+  document.getElementById('feedback-stats').innerHTML = statsHtml;
 
   // Contador revelado
   const counterEl = document.getElementById('feedback-counter');

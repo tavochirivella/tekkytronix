@@ -1,7 +1,9 @@
 const LEVELS_DATA = [
-  // ── SECTOR 1: Patrones de alternación ──
+
+  // ── SECTOR 1: Alternación AB (muy guiado) ──────────────────────────────────
   {
-    "id": "level_01", "title": "Órbita Roja y Azul",
+    "id": "level_01",
+    "title": "Órbita Roja y Azul",
     "type": "pattern", "mechanic": "drag_drop", "theme": "planets", "sector": 1, "difficulty": 1,
     "emptySlots": 1,
     "rule": { "kind": "alternation", "attributes": ["color"], "sequence": ["red","blue"] },
@@ -12,13 +14,14 @@ const LEVELS_DATA = [
       { "id": "p_red_2",  "color": "red",  "label": "Planeta Rojo" },
       { "id": "p_blue_2", "color": "blue", "label": "Planeta Azul" },
       { "id": "p_red_3",  "color": "red",  "label": "Planeta Rojo" },
-      { "id": "p_blue_3", "color": "blue", "label": "Planeta Azul" }
+      { "id": "p_blue_3", "color": "blue", "label": "Planeta Azul" },
+      { "id": "p_red_d1", "color": "red",  "label": "Planeta Rojo",     "distractor": true }
     ],
-    "goal": { "expectedColors": ["red","blue","red","blue","red","blue"] },
-    "hint": "Los planetas se repiten siguiendo un orden fijo."
+    "hint": "Observa el patrón y coloca el elemento que falta."
   },
   {
-    "id": "level_02", "title": "Señales del Sistema",
+    "id": "level_02",
+    "title": "Señales del Sistema",
     "type": "pattern", "mechanic": "drag_drop", "theme": "symbols", "sector": 1, "difficulty": 1,
     "emptySlots": 2,
     "rule": { "kind": "alternation", "attributes": ["shape"], "sequence": ["circle","triangle"] },
@@ -29,13 +32,15 @@ const LEVELS_DATA = [
       { "id": "s_circle_2",   "shape": "circle",   "label": "Señal Circular" },
       { "id": "s_triangle_2", "shape": "triangle", "label": "Señal Triangular" },
       { "id": "s_circle_3",   "shape": "circle",   "label": "Señal Circular" },
-      { "id": "s_triangle_3", "shape": "triangle", "label": "Señal Triangular" }
+      { "id": "s_triangle_3", "shape": "triangle", "label": "Señal Triangular" },
+      { "id": "s_circle_d1",  "shape": "circle",   "label": "Señal Circular",   "distractor": true },
+      { "id": "s_tri_d1",     "shape": "triangle", "label": "Señal Triangular", "distractor": true }
     ],
-    "goal": { "expectedShapes": ["circle","triangle","circle","triangle","circle","triangle"] },
-    "hint": "Las señales siguen el mismo orden que los planetas del nivel anterior."
+    "hint": "El patrón alterna entre dos formas. No todos los elementos del banco son necesarios."
   },
   {
-    "id": "level_03", "title": "Red de Energía",
+    "id": "level_03",
+    "title": "Red de Energía",
     "type": "pattern", "mechanic": "drag_drop", "theme": "robots", "sector": 1, "difficulty": 2,
     "emptySlots": 3,
     "rule": { "kind": "group", "attributes": ["color"], "sequence": ["yellow","yellow","purple"] },
@@ -46,15 +51,17 @@ const LEVELS_DATA = [
       { "id": "r_purple_1", "color": "purple", "label": "Robot Púrpura" },
       { "id": "r_yellow_3", "color": "yellow", "label": "Robot Amarillo" },
       { "id": "r_yellow_4", "color": "yellow", "label": "Robot Amarillo" },
-      { "id": "r_purple_2", "color": "purple", "label": "Robot Púrpura" }
+      { "id": "r_purple_2", "color": "purple", "label": "Robot Púrpura" },
+      { "id": "r_blue_d1",  "color": "blue",   "label": "Robot Azul",    "distractor": true },
+      { "id": "r_red_d1",   "color": "red",    "label": "Robot Rojo",    "distractor": true }
     ],
-    "goal": { "expectedColors": ["yellow","yellow","purple","yellow","yellow","purple"] },
-    "hint": "El patrón se repite en grupos de tres."
+    "hint": "El patrón se repite en grupos. No todos los elementos del banco son necesarios."
   },
 
-  // ── SECTOR 2: Clasificación ──
+  // ── SECTOR 2: Clasificación ─────────────────────────────────────────────────
   {
-    "id": "level_04", "title": "Clasificador de Planetas",
+    "id": "level_04",
+    "title": "Clasificador de Planetas",
     "type": "classification", "mechanic": "drag_drop", "theme": "planets", "sector": 2, "difficulty": 1,
     "emptySlots": 2,
     "categories": [
@@ -73,9 +80,10 @@ const LEVELS_DATA = [
     "hint": "Agrupa los planetas por su color."
   },
   {
-    "id": "level_05", "title": "Señales Mixtas",
+    "id": "level_05",
+    "title": "Señales Mixtas",
     "type": "classification", "mechanic": "drag_drop", "theme": "symbols", "sector": 2, "difficulty": 1,
-    "emptySlots": 3,
+    "emptySlots": 4,
     "categories": [
       { "id": "cat_circle",   "label": "Círculos",   "shape": "circle"   },
       { "id": "cat_triangle", "label": "Triángulos", "shape": "triangle" }
@@ -92,7 +100,8 @@ const LEVELS_DATA = [
     "hint": "Separa las señales por su forma."
   },
   {
-    "id": "level_06", "title": "Brigadas de Robots",
+    "id": "level_06",
+    "title": "Brigadas de Robots",
     "type": "classification", "mechanic": "drag_drop", "theme": "robots", "sector": 2, "difficulty": 2,
     "emptySlots": 4,
     "categories": [
@@ -111,11 +120,12 @@ const LEVELS_DATA = [
     "hint": "No todos los grupos tienen el mismo tamaño."
   },
 
-  // ── SECTOR 3: Patrones complejos ──
+  // ── SECTOR 3: Patrones de 3 elementos (ABC) ─────────────────────────────────
   {
-    "id": "level_07", "title": "Triple Frecuencia",
+    "id": "level_07",
+    "title": "Triple Frecuencia",
     "type": "pattern", "mechanic": "drag_drop", "theme": "planets", "sector": 3, "difficulty": 3,
-    "emptySlots": 4,
+    "emptySlots": 3,
     "rule": { "kind": "alternation", "attributes": ["color"], "sequence": ["red","blue","yellow"] },
     "slots": 6,
     "availableItems": [
@@ -124,36 +134,57 @@ const LEVELS_DATA = [
       { "id": "tp_y1", "color": "yellow", "label": "Planeta Amarillo" },
       { "id": "tp_r2", "color": "red",    "label": "Planeta Rojo" },
       { "id": "tp_b2", "color": "blue",   "label": "Planeta Azul" },
-      { "id": "tp_y2", "color": "yellow", "label": "Planeta Amarillo" }
+      { "id": "tp_y2", "color": "yellow", "label": "Planeta Amarillo" },
+      { "id": "tp_b_d", "color": "blue",  "label": "Planeta Azul",    "distractor": true },
+      { "id": "tp_r_d", "color": "red",   "label": "Planeta Rojo",    "distractor": true }
     ],
-    "goal": { "expectedColors": ["red","blue","yellow","red","blue","yellow"] },
-    "hint": "El ciclo ahora tiene tres elementos distintos."
+    "hint": "El ciclo tiene tres elementos. No todos los del banco son necesarios."
   },
   {
-    "id": "level_08", "title": "Código de Transmisión",
+    "id": "level_08",
+    "title": "Código de Transmisión",
     "type": "pattern", "mechanic": "drag_drop", "theme": "symbols", "sector": 3, "difficulty": 3,
-    "emptySlots": 6,
-    "rule": { "kind": "group", "attributes": ["shape"], "sequence": ["circle","circle","triangle","triangle"] },
-    "slots": 8,
+    "emptySlots": 4,
+    "rule": { "kind": "alternation", "attributes": ["shape"], "sequence": ["circle","triangle","circle"] },
+    "slots": 6,
     "availableItems": [
       { "id": "ct_c1", "shape": "circle",   "label": "Señal Circular" },
-      { "id": "ct_c2", "shape": "circle",   "label": "Señal Circular" },
       { "id": "ct_t1", "shape": "triangle", "label": "Señal Triangular" },
+      { "id": "ct_c2", "shape": "circle",   "label": "Señal Circular" },
       { "id": "ct_t2", "shape": "triangle", "label": "Señal Triangular" },
       { "id": "ct_c3", "shape": "circle",   "label": "Señal Circular" },
-      { "id": "ct_c4", "shape": "circle",   "label": "Señal Circular" },
       { "id": "ct_t3", "shape": "triangle", "label": "Señal Triangular" },
-      { "id": "ct_t4", "shape": "triangle", "label": "Señal Triangular" }
+      { "id": "ct_c_d1","shape": "circle",  "label": "Señal Circular",   "distractor": true },
+      { "id": "ct_t_d1","shape": "triangle","label": "Señal Triangular", "distractor": true }
     ],
-    "goal": { "expectedShapes": ["circle","circle","triangle","triangle","circle","circle","triangle","triangle"] },
-    "hint": "Los grupos ahora tienen dos elementos del mismo tipo."
+    "hint": "Observa cuántos hay de cada tipo dentro del ciclo."
   },
 
-  // ── SECTOR 4: Clasificación avanzada ──
+  // ── SECTOR 4: Grupos y clasificación avanzada ───────────────────────────────
   {
-    "id": "level_09", "title": "Tres Facciones",
-    "type": "classification", "mechanic": "drag_drop", "theme": "robots", "sector": 4, "difficulty": 3,
-    "emptySlots": 5,
+    "id": "level_09",
+    "title": "Grupos de Energía",
+    "type": "pattern", "mechanic": "drag_drop", "theme": "robots", "sector": 4, "difficulty": 3,
+    "emptySlots": 4,
+    "rule": { "kind": "group", "attributes": ["color"], "sequence": ["yellow","yellow","purple"] },
+    "slots": 6,
+    "availableItems": [
+      { "id": "ge_y1", "color": "yellow", "label": "Robot Amarillo" },
+      { "id": "ge_y2", "color": "yellow", "label": "Robot Amarillo" },
+      { "id": "ge_p1", "color": "purple", "label": "Robot Púrpura" },
+      { "id": "ge_y3", "color": "yellow", "label": "Robot Amarillo" },
+      { "id": "ge_y4", "color": "yellow", "label": "Robot Amarillo" },
+      { "id": "ge_p2", "color": "purple", "label": "Robot Púrpura" },
+      { "id": "ge_r_d","color": "red",    "label": "Robot Rojo",    "distractor": true },
+      { "id": "ge_b_d","color": "blue",   "label": "Robot Azul",   "distractor": true }
+    ],
+    "hint": "Los grupos de este ciclo no son del mismo tamaño. Elige bien."
+  },
+  {
+    "id": "level_10",
+    "title": "Tres Facciones",
+    "type": "classification", "mechanic": "drag_drop", "theme": "robots", "sector": 4, "difficulty": 4,
+    "emptySlots": 6,
     "categories": [
       { "id": "cat_red",    "label": "Facción Roja",     "color": "red"    },
       { "id": "cat_yellow", "label": "Facción Amarilla", "color": "yellow" },
@@ -165,28 +196,14 @@ const LEVELS_DATA = [
       { "id": "tf_y1", "color": "yellow", "label": "Robot Amarillo" },
       { "id": "tf_y2", "color": "yellow", "label": "Robot Amarillo" },
       { "id": "tf_p1", "color": "purple", "label": "Robot Púrpura" },
-      { "id": "tf_p2", "color": "purple", "label": "Robot Púrpura" }
+      { "id": "tf_p2", "color": "purple", "label": "Robot Púrpura" },
+      { "id": "tf_r3", "color": "red",    "label": "Robot Rojo" }
     ],
-    "goal": { "cat_red": ["tf_r1","tf_r2"], "cat_yellow": ["tf_y1","tf_y2"], "cat_purple": ["tf_p1","tf_p2"] },
-    "hint": "Ahora hay tres grupos distintos."
-  },
-  {
-    "id": "level_10", "title": "Sincronización Final",
-    "type": "pattern", "mechanic": "drag_drop", "theme": "planets", "sector": 4, "difficulty": 4,
-    "emptySlots": 8,
-    "rule": { "kind": "group", "attributes": ["color"], "sequence": ["red","blue","blue","yellow"] },
-    "slots": 8,
-    "availableItems": [
-      { "id": "sf_r1", "color": "red",    "label": "Planeta Rojo" },
-      { "id": "sf_b1", "color": "blue",   "label": "Planeta Azul" },
-      { "id": "sf_b2", "color": "blue",   "label": "Planeta Azul" },
-      { "id": "sf_y1", "color": "yellow", "label": "Planeta Amarillo" },
-      { "id": "sf_r2", "color": "red",    "label": "Planeta Rojo" },
-      { "id": "sf_b3", "color": "blue",   "label": "Planeta Azul" },
-      { "id": "sf_b4", "color": "blue",   "label": "Planeta Azul" },
-      { "id": "sf_y2", "color": "yellow", "label": "Planeta Amarillo" }
-    ],
-    "goal": { "expectedColors": ["red","blue","blue","yellow","red","blue","blue","yellow"] },
-    "hint": "El ciclo tiene cuatro elementos. Uno de ellos se repite dentro del grupo."
+    "goal": {
+      "cat_red":    ["tf_r1","tf_r2","tf_r3"],
+      "cat_yellow": ["tf_y1","tf_y2"],
+      "cat_purple": ["tf_p1","tf_p2"]
+    },
+    "hint": "Tres facciones. Los grupos no tienen el mismo tamaño."
   }
 ];
