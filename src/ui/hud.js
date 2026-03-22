@@ -2,9 +2,10 @@ const HUD = (() => {
   let _timerInterval = null;
   let _startTime = null;
 
+  // Timer corre internamente pero NO se muestra (evita ansiedad en niños)
   function startTimer() {
     _startTime = Date.now();
-    _timerInterval = setInterval(_tick, 1000);
+    // No se muestra el timer — se registra internamente para métricas
   }
 
   function stopTimer() {
@@ -14,17 +15,7 @@ const HUD = (() => {
 
   function resetTimer() {
     stopTimer();
-    _setTimerDisplay(0);
-  }
-
-  function _tick() {
-    const elapsed = Date.now() - _startTime;
-    _setTimerDisplay(elapsed);
-  }
-
-  function _setTimerDisplay(ms) {
-    const el = document.getElementById('hud-timer');
-    if (el) el.textContent = Helpers.formatTime(ms);
+    _startTime = null;
   }
 
   function setAttempts(n) {

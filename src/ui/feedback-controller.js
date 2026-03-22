@@ -34,7 +34,7 @@ const FeedbackController = (() => {
     msg.textContent = text;
     document.body.appendChild(msg);
 
-    setTimeout(() => msg.remove(), 2000);
+    setTimeout(() => msg.remove(), 4000);
   }
 
   function showLevelComplete() {

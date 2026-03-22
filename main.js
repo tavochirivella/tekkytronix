@@ -50,7 +50,7 @@ function _setupStartScreen() {
     if (lastLevel) {
       btnContinue.style.display = 'block';
       btnContinue.textContent   = `Continuar — ${lastLevel.title}`;
-      btnStart.textContent      = 'Nueva misión';
+      btnStart.textContent      = 'Ver mapa';
       btnStart.className        = 'btn btn--secondary';
     }
   }
@@ -73,20 +73,19 @@ function _setupStartScreen() {
   });
 
   btnClear.addEventListener('click', () => {
-    if (!confirm('¿Borrar todo el progreso? Esta acción no se puede deshacer.')) return;
-    ProgressManager.clear();
-    // Reiniciar estado en memoria
-    GameStateManager.set('unlockedLevels', ['level_01']);
-    GameStateManager.set('performanceMetrics', {});
-    GameStateManager.set('totalRepaired', 0);
-    GameStateManager.set('currentLevelId', null);
-    // Refrescar pantalla de inicio
-    btnContinue.style.display = 'none';
-    btnStart.textContent      = 'Nueva misión';
-    btnStart.className        = 'btn btn--primary';
-    repairedEl.style.display  = 'none';
-    btnClear.style.display    = 'none';
-    FeedbackController.showMessage('Progreso borrado', 'info');
+    _showModal('¿Seguro que quieres empezar de cero? Se borrará todo tu progreso.', () => {
+      ProgressManager.clear();
+      GameStateManager.set('unlockedLevels', ['level_01']);
+      GameStateManager.set('performanceMetrics', {});
+      GameStateManager.set('totalRepaired', 0);
+      GameStateManager.set('currentLevelId', null);
+      btnContinue.style.display = 'none';
+      btnStart.textContent      = 'Nueva misión';
+      btnStart.className        = 'btn btn--primary';
+      repairedEl.style.display  = 'none';
+      btnClear.style.display    = 'none';
+      FeedbackController.showMessage('Progreso borrado', 'info');
+    });
   });
 }
 
@@ -162,6 +161,9 @@ function _loadLevel(levelId) {
   HUD.startTimer();
 
   _renderLevel(level);
+  _updateProgress(level);
+  _setupHintButton(level);
+  _hideInlineFeedback();
   ScreenManager.show('level');
 }
 
@@ -560,7 +562,7 @@ function _check() {
     if (playerAnswer.includes(null)) {
       GameStateManager.set('attempts', attempts - 1);
       HUD.setAttempts(attempts - 1);
-      FeedbackController.showMessage('Completa todos los espacios vacíos', 'info');
+      _showInlineFeedback('Completa todos los espacios vacíos antes de verificar', 'info');
       return;
     }
 
@@ -574,7 +576,7 @@ function _check() {
     if (bankItemsEl.length > 0) {
       GameStateManager.set('attempts', attempts - 1);
       HUD.setAttempts(attempts - 1);
-      FeedbackController.showMessage('Clasifica todos los elementos del banco', 'info');
+      _showInlineFeedback('Clasifica todos los elementos del banco antes de verificar', 'info');
       return;
     }
     result = RuleEngine.evaluate(level, _categories);
@@ -625,12 +627,12 @@ function _highlightCategoryError(catId) {
 
 function _showErrorHint(errorType) {
   const messages = {
-    impulsive:  'Observa bien antes de actuar',
-    visual:     'Revisa la categoría de cada elemento',
-    rule:       'Ese elemento no pertenece ahí',
+    impulsive:  'No tan rápido — mira el patrón completo antes de colocar',
+    visual:     'Casi — revisa bien el color o la forma de cada elemento',
+    rule:       'Ese elemento no pertenece al patrón. Fíjate cuáles se repiten',
     incomplete: 'Faltan elementos por colocar'
   };
-  FeedbackController.showMessage(messages[errorType] || 'Intenta de nuevo', 'error');
+  _showInlineFeedback(messages[errorType] || 'Algo no está bien — intenta de nuevo', 'error');
 }
 
 // ─── FEEDBACK SCREEN ──────────────────────────────────────
@@ -639,17 +641,26 @@ function _showFeedbackScreen(attempts, elapsed, hasNext) {
   const totalRepaired   = state.totalRepaired;
   const sessionRepaired = state.sessionRepaired;
 
-  // Métricas de tiempo por intento
-  const times    = _attemptTimes;
-  const fastest  = times.length ? Math.min(...times) : elapsed;
-  const slowest  = times.length ? Math.max(...times) : elapsed;
-  const avgMs    = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : elapsed;
+  // Confetti
+  _showConfetti();
 
-  let statsHtml = `Tiempo total: <strong>${Helpers.formatTime(elapsed)}</strong> · Intentos: <strong>${attempts}</strong>`;
-  if (attempts > 1) {
-    statsHtml += `<br><small>Más rápido: ${Helpers.formatTime(fastest)} · Promedio por intento: ${Helpers.formatTime(avgMs)}</small>`;
+  // Mensaje motivacional aleatorio
+  const celebrationMessages = [
+    '¡Increíble! La galaxia está más segura gracias a ti.',
+    '¡Excelente trabajo! Eres un verdadero ingeniero espacial.',
+    '¡Lo lograste! El sistema volvió a funcionar.',
+    '¡Misión cumplida! Tu lógica es imparable.',
+    '¡Genial! Cada vez resuelves más rápido.'
+  ];
+  const msgEl = document.getElementById('feedback-message');
+  msgEl.textContent = celebrationMessages[Math.floor(Math.random() * celebrationMessages.length)];
+
+  // Estadísticas simplificadas (aptas para niños)
+  let statsHtml = `Tiempo: ${Helpers.formatTime(elapsed)} · Intentos: ${attempts}`;
+  if (attempts === 1) {
+    statsHtml = `¡Perfecto a la primera! · Tiempo: ${Helpers.formatTime(elapsed)}`;
   }
-  document.getElementById('feedback-stats').innerHTML = statsHtml;
+  document.getElementById('feedback-stats').textContent = statsHtml;
 
   // Contador revelado
   const counterEl = document.getElementById('feedback-counter');
@@ -689,6 +700,96 @@ function _bindLevelButtons(level) {
     HUD.setAttempts(0);
     _loadLevel(level.id);
   });
+}
+
+// ─── HINT SYSTEM ─────────────────────────────────────────
+function _setupHintButton(level) {
+  const btn   = document.getElementById('btn-hint');
+  const panel = document.getElementById('hint-panel');
+  panel.style.display = 'none';
+
+  const newBtn = btn.cloneNode(true);
+  btn.replaceWith(newBtn);
+
+  let visible = false;
+  newBtn.addEventListener('click', () => {
+    visible = !visible;
+    if (visible) {
+      panel.textContent    = level.hint || 'Observa el patrón con atención.';
+      panel.style.display  = 'block';
+    } else {
+      panel.style.display  = 'none';
+    }
+  });
+}
+
+// ─── PROGRESS INDICATOR ──────────────────────────────────
+function _updateProgress(level) {
+  const all     = LevelRepository.getAll();
+  const index   = all.findIndex(l => l.id === level.id) + 1;
+  const total   = all.length;
+  const el      = document.getElementById('hud-progress');
+  if (el) el.textContent = `${index}/${total}`;
+}
+
+// ─── INLINE FEEDBACK (reemplaza toast para errores en nivel) ──
+function _showInlineFeedback(text, type) {
+  const el = document.getElementById('inline-feedback');
+  if (!el) return;
+  el.className   = `feedback-inline feedback-inline--${type}`;
+  el.textContent = text;
+  el.style.display = 'block';
+
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+function _hideInlineFeedback() {
+  const el = document.getElementById('inline-feedback');
+  if (el) el.style.display = 'none';
+}
+
+// ─── CONFETTI ────────────────────────────────────────────
+function _showConfetti() {
+  const container = document.createElement('div');
+  container.className = 'confetti-container';
+  document.body.appendChild(container);
+
+  const colors = ['#2ecc71','#4f8ef7','#f1c40f','#e74c3c','#9b59b6','#1abc9c'];
+  for (let i = 0; i < 40; i++) {
+    const piece  = document.createElement('div');
+    piece.className = 'confetti';
+    piece.style.left            = `${Math.random() * 100}%`;
+    piece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.animationDuration = `${1.5 + Math.random() * 2}s`;
+    piece.style.animationDelay    = `${Math.random() * 0.6}s`;
+    piece.style.width  = `${6 + Math.random() * 8}px`;
+    piece.style.height = `${6 + Math.random() * 8}px`;
+    container.appendChild(piece);
+  }
+
+  setTimeout(() => container.remove(), 4000);
+}
+
+// ─── CUSTOM MODAL ────────────────────────────────────────
+function _showModal(text, onConfirm) {
+  const overlay   = document.getElementById('modal-overlay');
+  const textEl    = document.getElementById('modal-text');
+  const cancelBtn = document.getElementById('modal-cancel');
+  const confirmBtn = document.getElementById('modal-confirm');
+
+  textEl.textContent    = text;
+  overlay.style.display = 'flex';
+
+  const cleanup = () => { overlay.style.display = 'none'; };
+
+  const newCancel  = cancelBtn.cloneNode(true);
+  const newConfirm = confirmBtn.cloneNode(true);
+  cancelBtn.replaceWith(newCancel);
+  confirmBtn.replaceWith(newConfirm);
+
+  newCancel.addEventListener('click', cleanup);
+  newConfirm.addEventListener('click', () => { cleanup(); onConfirm(); });
 }
 
 // ===== START =====
