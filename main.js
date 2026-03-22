@@ -1,5 +1,5 @@
 // ===== TEKKYTRONIX — main.js =====
-// Fase 2: Mapa, clasificación, HUD
+// Fase 2+: pre-llenado progresivo, contador, continuar misión
 
 const ITEM_VISUALS = {
   planets: { red: '🔴', blue: '🔵', yellow: '🟡', purple: '🟣' },
@@ -8,19 +8,18 @@ const ITEM_VISUALS = {
 };
 
 let _currentLevel   = null;
-let _slots          = [];   // patrón: [{ el, itemId, itemData }]
-let _categories     = {};   // clasificación: { catId: [itemId, ...] }
+let _slots          = [];   // [{ el, itemId, itemData, prefilled }]
+let _categories     = {};   // { catId: [itemId, ...] }
 let _draggedItemId  = null;
-let _draggedFromCat = null; // para devolver al banco desde categoría
+let _draggedFromCat = null;
 
 // ===== INIT =====
 function init() {
   _registerScreens();
-  _bindStartScreen();
+  _setupStartScreen();
 
   const saved = ProgressManager.load();
   ProgressManager.applyToState(saved);
-
   LevelRepository.load();
 
   ScreenManager.show('start');
@@ -34,8 +33,36 @@ function _registerScreens() {
 }
 
 // ===== START SCREEN =====
-function _bindStartScreen() {
-  document.getElementById('btn-start').addEventListener('click', () => {
+function _setupStartScreen() {
+  const lastLevelId  = ProgressManager.getLastLevelId();
+  const totalRepaired = GameStateManager.get('totalRepaired');
+  const btnContinue  = document.getElementById('btn-continue');
+  const btnStart     = document.getElementById('btn-start');
+  const repairedEl   = document.getElementById('start-repaired');
+
+  // Mostrar "Continuar" si hay progreso guardado
+  if (lastLevelId) {
+    const lastLevel = LevelRepository.getById(lastLevelId);
+    if (lastLevel) {
+      btnContinue.style.display = 'block';
+      btnContinue.textContent   = `Continuar — ${lastLevel.title}`;
+      btnStart.textContent      = 'Nueva misión';
+      btnStart.className        = 'btn btn--secondary';
+    }
+  }
+
+  // Mostrar sistemas reparados si hay alguno
+  if (totalRepaired > 0) {
+    repairedEl.style.display  = 'block';
+    repairedEl.textContent    = `Sistemas reparados: ${totalRepaired}`;
+  }
+
+  btnContinue.addEventListener('click', () => {
+    _renderMap();
+    ScreenManager.show('map');
+  });
+
+  btnStart.addEventListener('click', () => {
     _renderMap();
     ScreenManager.show('map');
   });
@@ -43,20 +70,21 @@ function _bindStartScreen() {
 
 // ===== MAP SCREEN =====
 function _renderMap() {
-  const container = document.getElementById('map-nodes');
+  const container  = document.getElementById('map-nodes');
   container.innerHTML = '';
 
-  const allLevels    = LevelRepository.getAll();
-  const unlocked     = GameStateManager.get('unlockedLevels');
-  const metrics      = GameStateManager.get('performanceMetrics');
-  const sectors      = [...new Set(allLevels.map(l => l.sector))];
+  const allLevels  = LevelRepository.getAll();
+  const unlocked   = GameStateManager.get('unlockedLevels');
+  const metrics    = GameStateManager.get('performanceMetrics');
+  const lastId     = GameStateManager.get('currentLevelId');
+  const sectors    = [...new Set(allLevels.map(l => l.sector))];
 
   sectors.forEach(sector => {
     const sectorEl = document.createElement('div');
     sectorEl.className = 'map__sector';
 
     const sectorTitle = document.createElement('p');
-    sectorTitle.className = 'map__sector-title';
+    sectorTitle.className   = 'map__sector-title';
     sectorTitle.textContent = `Sector ${sector}`;
     sectorEl.appendChild(sectorTitle);
 
@@ -66,10 +94,16 @@ function _renderMap() {
     allLevels.filter(l => l.sector === sector).forEach(level => {
       const isUnlocked  = unlocked.includes(level.id);
       const isCompleted = !!metrics[level.id];
-      const index       = LevelRepository.getAll().findIndex(l => l.id === level.id) + 1;
+      const isCurrent   = level.id === lastId;
+      const index       = allLevels.findIndex(l => l.id === level.id) + 1;
 
       const node = document.createElement('button');
-      node.className = `map-node ${isCompleted ? 'map-node--done' : ''} ${!isUnlocked ? 'map-node--locked' : ''}`;
+      node.className = [
+        'map-node',
+        isCompleted ? 'map-node--done'    : '',
+        !isUnlocked ? 'map-node--locked'  : '',
+        isCurrent   ? 'map-node--current' : ''
+      ].join(' ').trim();
       node.disabled  = !isUnlocked;
       node.innerHTML = `
         <span class="map-node__number">${index}</span>
@@ -78,10 +112,7 @@ function _renderMap() {
         ${!isUnlocked ? '<span class="map-node__lock">🔒</span>' : ''}
       `;
 
-      if (isUnlocked) {
-        node.addEventListener('click', () => _loadLevel(level.id));
-      }
-
+      if (isUnlocked) node.addEventListener('click', () => _loadLevel(level.id));
       nodesRow.appendChild(node);
     });
 
@@ -99,6 +130,7 @@ function _loadLevel(levelId) {
   _slots         = [];
   _categories    = {};
   _draggedItemId = null;
+  _draggedFromCat = null;
 
   GameStateManager.resetForLevel(levelId);
   HUD.resetTimer();
@@ -112,7 +144,6 @@ function _loadLevel(levelId) {
 function _renderLevel(level) {
   document.getElementById('level-title').textContent = level.title;
 
-  // Botón volver al mapa
   const btnBack = document.getElementById('btn-back-map');
   btnBack.replaceWith(btnBack.cloneNode(true));
   document.getElementById('btn-back-map').addEventListener('click', () => {
@@ -124,11 +155,8 @@ function _renderLevel(level) {
   const body = document.getElementById('level-body');
   body.innerHTML = '';
 
-  if (level.type === 'pattern') {
-    _renderPatternLevel(level, body);
-  } else if (level.type === 'classification') {
-    _renderClassificationLevel(level, body);
-  }
+  if (level.type === 'pattern')        _renderPatternLevel(level, body);
+  else if (level.type === 'classification') _renderClassificationLevel(level, body);
 
   _bindLevelButtons(level);
 }
@@ -137,7 +165,7 @@ function _renderLevel(level) {
 function _renderPatternLevel(level, body) {
   body.innerHTML = `
     <section class="level__slots-section">
-      <p class="level__instruction">Completa el patrón arrastrando los elementos:</p>
+      <p class="level__instruction">Completa el patrón — arrastra los elementos a los espacios vacíos:</p>
       <div id="slots-container" class="slots-container"></div>
     </section>
     <section class="level__items-section">
@@ -146,23 +174,59 @@ function _renderPatternLevel(level, body) {
     </section>
   `;
 
-  _renderSlots(level);
-  _renderItemBank(level.availableItems, level.theme, 'items-container');
+  const bankItems = _buildPatternSlots(level);
+  _renderItemBank(bankItems, level.theme, 'items-container');
 }
 
-function _renderSlots(level) {
-  const container = document.getElementById('slots-container');
-  container.innerHTML = '';
-  _slots = [];
+function _buildPatternSlots(level) {
+  const container    = document.getElementById('slots-container');
+  const attribute    = level.rule.attributes[0];
+  const capAttr      = attribute.charAt(0).toUpperCase() + attribute.slice(1);
+  const goal         = level.goal[`expected${capAttr}s`];
+  const emptySlots   = level.emptySlots ?? level.slots;
+  const prefillCount = level.slots - emptySlots;
+
+  const usedItemIds = new Set();
 
   for (let i = 0; i < level.slots; i++) {
     const el = document.createElement('div');
-    el.className    = 'slot';
+    el.className     = 'slot';
     el.dataset.index = i;
-    _bindSlotDrop(el, i);
+
+    if (i < prefillCount) {
+      // Slot pre-llenado (pista)
+      const expectedAttr = goal[i];
+      const item = level.availableItems.find(it => it[attribute] === expectedAttr && !usedItemIds.has(it.id));
+      if (item) {
+        usedItemIds.add(item.id);
+        el.classList.add('slot--prefilled');
+        _renderPrefillContent(el, item, level.theme);
+        _slots.push({ el, itemId: item.id, itemData: item, prefilled: true });
+      } else {
+        _bindSlotDrop(el, i);
+        _slots.push({ el, itemId: null, itemData: null, prefilled: false });
+      }
+    } else {
+      // Slot vacío interactivo
+      _bindSlotDrop(el, i);
+      _slots.push({ el, itemId: null, itemData: null, prefilled: false });
+    }
+
     container.appendChild(el);
-    _slots.push({ el, itemId: null, itemData: null });
   }
+
+  // Solo los ítems no usados en el pre-llenado van al banco
+  return level.availableItems.filter(it => !usedItemIds.has(it.id));
+}
+
+function _renderPrefillContent(slotEl, item, theme) {
+  const inner = document.createElement('div');
+  inner.className = 'item item--prefill';
+  const colorAttr = item.color || item.shape;
+  if (colorAttr) inner.classList.add(`item--${colorAttr}`);
+  if (item.shape) inner.classList.add(`item--${item.shape}`);
+  inner.textContent = _getItemEmoji(item, theme);
+  slotEl.appendChild(inner);
 }
 
 // ─── CLASIFICACIÓN ────────────────────────────────────────
@@ -179,7 +243,7 @@ function _renderClassificationLevel(level, body) {
 
   body.innerHTML = `
     <section class="level__cats-section">
-      <p class="level__instruction">Arrastra cada elemento a su zona:</p>
+      <p class="level__instruction">Arrastra cada elemento a su zona — los que ya están son pistas:</p>
       <div class="cats-container">${catsHtml}</div>
     </section>
     <section class="level__items-section">
@@ -194,24 +258,50 @@ function _renderClassificationLevel(level, body) {
     _bindCategoryDrop(zoneEl, cat.id);
   });
 
-  _renderItemBank(level.availableItems, level.theme, 'items-container');
+  const bankItems = _buildClassificationPrefill(level);
+  _renderItemBank(bankItems, level.theme, 'items-container');
+}
+
+function _buildClassificationPrefill(level) {
+  const emptySlots      = level.emptySlots ?? level.availableItems.length;
+  const preclassifyCount = level.availableItems.length - emptySlots;
+
+  // Aplanar items del goal en orden: cat1[0], cat2[0], cat1[1], cat2[1]... (alternado)
+  // para distribuir las pistas equitativamente entre categorías
+  const catIds    = Object.keys(level.goal);
+  const goalArrays = catIds.map(cid => [...level.goal[cid]]);
+  const flatGoal  = [];
+  const maxLen    = Math.max(...goalArrays.map(a => a.length));
+  for (let i = 0; i < maxLen; i++) {
+    goalArrays.forEach((arr, ci) => {
+      if (arr[i]) flatGoal.push({ catId: catIds[ci], itemId: arr[i] });
+    });
+  }
+
+  const preclassified = flatGoal.slice(0, preclassifyCount);
+  const bankItemIds   = new Set(flatGoal.slice(preclassifyCount).map(x => x.itemId));
+
+  // Renderizar pistas en cada zona
+  preclassified.forEach(({ catId, itemId }) => {
+    const item   = level.availableItems.find(it => it.id === itemId);
+    if (!item) return;
+    _categories[catId].push(itemId);
+    const zoneEl = document.getElementById(`cat-items-${catId}`);
+    const el     = _createItemElement(item, level.theme, true);
+    el.classList.add('item--prefill');
+    zoneEl.appendChild(el);
+  });
+
+  return level.availableItems.filter(it => bankItemIds.has(it.id));
 }
 
 function _bindCategoryDrop(zoneEl, catId) {
-  zoneEl.addEventListener('dragover', e => { e.preventDefault(); zoneEl.classList.add('drag-over'); });
+  zoneEl.addEventListener('dragover',  e => { e.preventDefault(); zoneEl.classList.add('drag-over'); });
   zoneEl.addEventListener('dragleave', () => zoneEl.classList.remove('drag-over'));
   zoneEl.addEventListener('drop', e => {
     e.preventDefault();
     zoneEl.classList.remove('drag-over');
     if (_draggedItemId) _placeItemInCategory(catId, _draggedItemId);
-  });
-  // Touch
-  zoneEl.addEventListener('touchend', e => {
-    const touch  = e.changedTouches[0];
-    const target = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (zoneEl.contains(target) && _draggedItemId) {
-      _placeItemInCategory(catId, _draggedItemId);
-    }
   });
 }
 
@@ -220,48 +310,43 @@ function _placeItemInCategory(catId, itemId) {
   const itemData = level.availableItems.find(i => i.id === itemId);
   if (!itemData) return;
 
-  // Retirar de categoría anterior si aplica
+  // Retirar de categoría anterior (no pre-llenada)
   if (_draggedFromCat && _draggedFromCat !== catId) {
     _categories[_draggedFromCat] = _categories[_draggedFromCat].filter(id => id !== itemId);
-    const prevZoneItems = document.getElementById(`cat-items-${_draggedFromCat}`);
-    const prevEl = prevZoneItems?.querySelector(`[data-item-id="${itemId}"]`);
-    prevEl?.remove();
+    const prevZone = document.getElementById(`cat-items-${_draggedFromCat}`);
+    prevZone?.querySelector(`[data-item-id="${itemId}"]`)?.remove();
   }
 
-  // Evitar duplicados
   if (_categories[catId].includes(itemId)) return;
 
   _categories[catId].push(itemId);
 
-  // Renderizar en la zona
-  const zoneItemsEl = document.getElementById(`cat-items-${catId}`);
+  const zoneEl = document.getElementById(`cat-items-${catId}`);
   const itemEl = _createItemElement(itemData, level.theme, true);
-  itemEl.addEventListener('click', () => _removeFromCategory(catId, itemId, itemEl));
-  zoneItemsEl.appendChild(itemEl);
+  itemEl.addEventListener('click', () => {
+    // Solo remover si NO es prefill
+    if (!itemEl.classList.contains('item--prefill')) _removeFromCategory(catId, itemId, itemEl);
+  });
+  zoneEl.appendChild(itemEl);
 
-  // Ocultar del banco
-  const bankEl = document.querySelector(`#items-container [data-item-id="${itemId}"]`);
-  if (bankEl) bankEl.classList.add('used');
-
+  document.querySelector(`#items-container [data-item-id="${itemId}"]`)?.classList.add('used');
   _draggedFromCat = null;
 }
 
 function _removeFromCategory(catId, itemId, itemEl) {
   _categories[catId] = _categories[catId].filter(id => id !== itemId);
   itemEl.remove();
-  const bankEl = document.querySelector(`#items-container [data-item-id="${itemId}"]`);
-  if (bankEl) bankEl.classList.remove('used');
+  document.querySelector(`#items-container [data-item-id="${itemId}"]`)?.classList.remove('used');
 }
 
-// ─── BANCO DE ITEMS (compartido) ──────────────────────────
+// ─── BANCO DE ITEMS ───────────────────────────────────────
 function _renderItemBank(items, theme, containerId) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
-  const shuffled = Helpers.shuffle(items);
-  shuffled.forEach(item => container.appendChild(_createItemElement(item, theme, false)));
+  Helpers.shuffle(items).forEach(item => container.appendChild(_createItemElement(item, theme, false)));
 }
 
-function _createItemElement(item, theme, inCategory) {
+function _createItemElement(item, theme, inZone) {
   const el = document.createElement('div');
   el.className      = 'item';
   el.dataset.itemId = item.id;
@@ -270,32 +355,31 @@ function _createItemElement(item, theme, inCategory) {
   const colorAttr = item.color || item.shape;
   if (colorAttr) el.classList.add(`item--${colorAttr}`);
   if (item.shape) el.classList.add(`item--${item.shape}`);
-
   el.textContent = _getItemEmoji(item, theme);
 
-  if (!inCategory) {
-    el.setAttribute('draggable', 'true');
-    el.addEventListener('dragstart', e => { _draggedItemId = item.id; _draggedFromCat = null; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
-    el.addEventListener('dragend',   () => { el.classList.remove('dragging'); _draggedItemId = null; });
-    _bindTouchDrag(el, item);
+  el.setAttribute('draggable', 'true');
 
-    // Para patrón: drop en slot por click también
+  el.addEventListener('dragstart', e => {
+    _draggedItemId  = item.id;
+    _draggedFromCat = inZone
+      ? Object.keys(_categories).find(cid => _categories[cid].includes(item.id)) || null
+      : null;
+    el.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  el.addEventListener('dragend', () => { el.classList.remove('dragging'); _draggedItemId = null; });
+
+  if (!inZone) {
+    _bindTouchDrag(el, item);
     if (_currentLevel?.type === 'pattern') {
       el.addEventListener('click', () => {
-        const emptySlot = _slots.findIndex(s => !s.itemId);
-        if (emptySlot !== -1) _placeItemInSlot(emptySlot, item.id);
+        const emptyIdx = _slots.findIndex(s => !s.prefilled && !s.itemId);
+        if (emptyIdx !== -1) _placeItemInSlot(emptyIdx, item.id);
       });
     }
   } else {
-    // Item dentro de categoría: más pequeño, sin cursor grab
     el.style.cursor = 'pointer';
-    el.title = `${item.label} (clic para devolver)`;
-    el.setAttribute('draggable', 'true');
-    el.addEventListener('dragstart', e => {
-      _draggedItemId  = item.id;
-      _draggedFromCat = Object.keys(_categories).find(cid => _categories[cid].includes(item.id)) || null;
-      e.dataTransfer.effectAllowed = 'move';
-    });
+    _bindTouchDrag(el, item);
   }
 
   return el;
@@ -320,6 +404,7 @@ function _bindSlotDrop(el, index) {
 }
 
 function _placeItemInSlot(slotIndex, itemId) {
+  if (_slots[slotIndex]?.prefilled) return;
   const level    = _currentLevel;
   const itemData = level.availableItems.find(i => i.id === itemId);
   if (!itemData) return;
@@ -327,9 +412,10 @@ function _placeItemInSlot(slotIndex, itemId) {
   const prevItem = _slots[slotIndex].itemId;
   if (prevItem) _returnItemToBank(prevItem);
 
-  const prevSlot = _slots.findIndex(s => s.itemId === itemId);
+  const prevSlot = _slots.findIndex(s => !s.prefilled && s.itemId === itemId);
   if (prevSlot !== -1 && prevSlot !== slotIndex) {
-    _slots[prevSlot] = { ..._slots[prevSlot], itemId: null, itemData: null };
+    _slots[prevSlot].itemId   = null;
+    _slots[prevSlot].itemData = null;
     _renderSlotContent(prevSlot, null, level.theme);
   }
 
@@ -340,6 +426,7 @@ function _placeItemInSlot(slotIndex, itemId) {
 }
 
 function _removeFromSlot(slotIndex) {
+  if (_slots[slotIndex]?.prefilled) return;
   const itemId = _slots[slotIndex].itemId;
   if (!itemId) return;
   _slots[slotIndex].itemId   = null;
@@ -362,7 +449,6 @@ function _renderSlotContent(slotIndex, itemData, theme) {
 function _markItemUsed(itemId) {
   document.querySelector(`#items-container [data-item-id="${itemId}"]`)?.classList.add('used');
 }
-
 function _returnItemToBank(itemId) {
   document.querySelector(`#items-container [data-item-id="${itemId}"]`)?.classList.remove('used');
 }
@@ -396,13 +482,12 @@ function _bindTouchDrag(el, item) {
     const target = document.elementFromPoint(touch.clientX, touch.clientY);
 
     if (_currentLevel?.type === 'pattern') {
-      const slotEl = target?.closest('.slot');
+      const slotEl = target?.closest('.slot:not(.slot--prefilled)');
       if (slotEl) _placeItemInSlot(parseInt(slotEl.dataset.index), _draggedItemId);
     } else if (_currentLevel?.type === 'classification') {
       const zoneEl = target?.closest('.cat-zone');
       if (zoneEl) _placeItemInCategory(zoneEl.dataset.catId, _draggedItemId);
     }
-
     _draggedItemId = null;
   });
 }
@@ -413,11 +498,9 @@ function _moveClone(clone, touch) {
 }
 
 function _highlightTargetUnder(touch) {
-  document.querySelectorAll('.slot, .cat-zone').forEach(el => el.classList.remove('drag-over'));
-  const target  = document.elementFromPoint(touch.clientX, touch.clientY);
-  const slotEl  = target?.closest('.slot');
-  const zoneEl  = target?.closest('.cat-zone');
-  (slotEl || zoneEl)?.classList.add('drag-over');
+  document.querySelectorAll('.slot:not(.slot--prefilled), .cat-zone').forEach(el => el.classList.remove('drag-over'));
+  const target = document.elementFromPoint(touch.clientX, touch.clientY);
+  (target?.closest('.slot:not(.slot--prefilled)') || target?.closest('.cat-zone'))?.classList.add('drag-over');
 }
 
 function _clearHighlights() {
@@ -435,13 +518,13 @@ function _check() {
   let slotEls = [];
 
   if (level.type === 'pattern') {
-    const attribute   = level.rule.attributes[0];
+    const attribute    = level.rule.attributes[0];
     const playerAnswer = _slots.map(s => s.itemData ? s.itemData[attribute] : null);
 
     if (playerAnswer.includes(null)) {
       GameStateManager.set('attempts', attempts - 1);
       HUD.setAttempts(attempts - 1);
-      FeedbackController.showMessage('Completa todos los espacios', 'info');
+      FeedbackController.showMessage('Completa todos los espacios vacíos', 'info');
       return;
     }
 
@@ -449,14 +532,15 @@ function _check() {
     slotEls = _slots.map(s => s.el);
 
   } else if (level.type === 'classification') {
-    const totalPlaced = Object.values(_categories).reduce((s, arr) => s + arr.length, 0);
-    if (totalPlaced < level.availableItems.length) {
+    // Calcular cuántos ítems del banco (no prefill) fueron clasificados
+    const emptySlots    = level.emptySlots ?? level.availableItems.length;
+    const bankItemsEl   = document.querySelectorAll('#items-container .item:not(.used)');
+    if (bankItemsEl.length > 0) {
       GameStateManager.set('attempts', attempts - 1);
       HUD.setAttempts(attempts - 1);
-      FeedbackController.showMessage('Clasifica todos los elementos', 'info');
+      FeedbackController.showMessage('Clasifica todos los elementos del banco', 'info');
       return;
     }
-
     result = RuleEngine.evaluate(level, _categories);
   }
 
@@ -508,19 +592,29 @@ function _showErrorHint(errorType) {
     impulsive:  'Observa bien antes de actuar',
     visual:     'Revisa la categoría de cada elemento',
     rule:       'Ese elemento no pertenece ahí',
-    incomplete: 'Faltan elementos por clasificar'
+    incomplete: 'Faltan elementos por colocar'
   };
   FeedbackController.showMessage(messages[errorType] || 'Intenta de nuevo', 'error');
 }
 
 // ─── FEEDBACK SCREEN ──────────────────────────────────────
 function _showFeedbackScreen(attempts, elapsed, hasNext) {
+  const state          = GameStateManager.get();
+  const totalRepaired  = state.totalRepaired;
+  const sessionRepaired = state.sessionRepaired;
+
   document.getElementById('feedback-stats').textContent =
     `Intentos: ${attempts} · Tiempo: ${Helpers.formatTime(elapsed)}`;
 
+  // Contador revelado
+  const counterEl = document.getElementById('feedback-counter');
+  counterEl.innerHTML = `
+    <span class="counter__session">Esta sesión: ${sessionRepaired} sistema${sessionRepaired !== 1 ? 's' : ''}</span>
+    <span class="counter__total">Total reparados: ${totalRepaired} ✦</span>
+  `;
+
   const btnNext = document.getElementById('btn-next');
   const btnMap  = document.getElementById('btn-map');
-
   btnNext.style.display = hasNext ? 'block' : 'none';
 
   btnNext.replaceWith(btnNext.cloneNode(true));
@@ -530,7 +624,6 @@ function _showFeedbackScreen(attempts, elapsed, hasNext) {
     const nextId = LevelRepository.getNextId(_currentLevel.id);
     if (nextId) _loadLevel(nextId);
   });
-
   document.getElementById('btn-map').addEventListener('click', () => {
     _renderMap();
     ScreenManager.show('map');
@@ -545,7 +638,6 @@ function _bindLevelButtons(level) {
     const el = document.getElementById(id);
     el.replaceWith(el.cloneNode(true));
   });
-
   document.getElementById('btn-check').addEventListener('click', _check);
   document.getElementById('btn-reset').addEventListener('click', () => {
     HUD.resetTimer();

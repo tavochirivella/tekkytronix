@@ -1,11 +1,12 @@
 const ProgressManager = (() => {
   const STORAGE_KEY = 'tekkytronix_save';
-  const SCHEMA_VERSION = 1;
+  const SCHEMA_VERSION = 2;
 
   const _defaults = {
     version: SCHEMA_VERSION,
     unlockedLevels: ['level_01'],
-    completedLevels: [],
+    lastLevelId: null,
+    totalRepaired: 0,
     audioEnabled: true,
     metrics: {}
   };
@@ -15,6 +16,10 @@ const ProgressManager = (() => {
       const raw = Storage.get(STORAGE_KEY);
       if (!raw) return null;
       const data = JSON.parse(raw);
+      // Migrar version 1 → 2
+      if (data.version === 1) {
+        return { ..._defaults, unlockedLevels: data.unlockedLevels || ['level_01'], metrics: data.metrics || {} };
+      }
       if (data.version !== SCHEMA_VERSION) return null;
       return data;
     } catch {
@@ -37,16 +42,18 @@ const ProgressManager = (() => {
   }
 
   function applyToState(saved) {
-    GameStateManager.set('unlockedLevels', saved.unlockedLevels);
-    GameStateManager.set('audioEnabled', saved.audioEnabled);
+    GameStateManager.set('unlockedLevels', saved.unlockedLevels || ['level_01']);
+    GameStateManager.set('audioEnabled', saved.audioEnabled ?? true);
     GameStateManager.set('performanceMetrics', saved.metrics || {});
+    GameStateManager.set('totalRepaired', saved.totalRepaired || 0);
   }
 
   function saveFromState() {
     const state = GameStateManager.get();
     save({
       unlockedLevels: state.unlockedLevels,
-      completedLevels: Object.keys(state.performanceMetrics),
+      lastLevelId: state.currentLevelId,
+      totalRepaired: state.totalRepaired,
       audioEnabled: state.audioEnabled,
       metrics: state.performanceMetrics
     });
@@ -55,14 +62,24 @@ const ProgressManager = (() => {
   function recordLevelResult(levelId, attempts, elapsedTime) {
     const state = GameStateManager.get();
     const metrics = state.performanceMetrics || {};
-    metrics[levelId] = { attempts, elapsedTime, completedAt: Date.now() };
-    GameStateManager.set('performanceMetrics', metrics);
+    // Solo registrar si es la primera vez o fue mejor intento
+    const prev = metrics[levelId];
+    if (!prev || attempts <= prev.attempts) {
+      metrics[levelId] = { attempts, elapsedTime, completedAt: Date.now() };
+      GameStateManager.set('performanceMetrics', metrics);
+    }
+    GameStateManager.incrementRepaired();
     saveFromState();
+  }
+
+  function getLastLevelId() {
+    const saved = _safeRead();
+    return saved?.lastLevelId || null;
   }
 
   function clear() {
     Storage.remove(STORAGE_KEY);
   }
 
-  return { load, save, applyToState, saveFromState, recordLevelResult, clear };
+  return { load, save, applyToState, saveFromState, recordLevelResult, getLastLevelId, clear };
 })();

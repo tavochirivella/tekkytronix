@@ -13,7 +13,9 @@
     <div class="start__content">
       <h1 class="start__title">TEKKYTRONIX</h1>
       <p class="start__subtitle">Repara los sistemas del universo</p>
-      <button id="btn-start" class="btn btn--primary">Iniciar misión</button>
+      <button id="btn-continue" class="btn btn--primary" style="display:none">Continuar misión</button>
+      <button id="btn-start" class="btn btn--primary">Nueva misión</button>
+      <p id="start-repaired" class="start__repaired" style="display:none"></p>
     </div>
   </div>
 
@@ -53,6 +55,7 @@
       <div class="feedback__icon">✦</div>
       <h2 class="feedback__title">¡Sistema reparado!</h2>
       <p id="feedback-stats" class="feedback__stats"></p>
+      <div id="feedback-counter" class="feedback__counter"></div>
       <button id="btn-next" class="btn btn--primary">Siguiente sistema</button>
       <button id="btn-map" class="btn btn--secondary">Ver mapa</button>
     </div>

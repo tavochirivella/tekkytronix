@@ -7,7 +7,9 @@ const GameStateManager = (() => {
     elapsedTime: 0,
     currentInteractionState: {},
     audioEnabled: true,
-    performanceMetrics: {}
+    performanceMetrics: {},
+    totalRepaired: 0,      // contador total de sistemas reparados (persistido)
+    sessionRepaired: 0     // contador de esta sesión (no persistido)
   };
 
   let _startTime = null;
@@ -53,5 +55,10 @@ const GameStateManager = (() => {
     }
   }
 
-  return { get, set, startTimer, stopTimer, incrementAttempts, resetForLevel, unlockLevel };
+  function incrementRepaired() {
+    state.totalRepaired += 1;
+    state.sessionRepaired += 1;
+  }
+
+  return { get, set, startTimer, stopTimer, incrementAttempts, resetForLevel, unlockLevel, incrementRepaired };
 })();
