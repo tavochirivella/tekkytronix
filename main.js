@@ -18,12 +18,13 @@ let _attemptStart    = null; // timestamp del inicio del intento actual
 // ===== INIT =====
 function init() {
   _registerScreens();
-  _setupStartScreen();
 
+  // Cargar datos y progreso ANTES de configurar la pantalla inicial
+  LevelRepository.load();
   const saved = ProgressManager.load();
   ProgressManager.applyToState(saved);
-  LevelRepository.load();
 
+  _setupStartScreen();
   ScreenManager.show('start');
 }
 
@@ -36,11 +37,12 @@ function _registerScreens() {
 
 // ===== START SCREEN =====
 function _setupStartScreen() {
-  const lastLevelId  = ProgressManager.getLastLevelId();
+  const lastLevelId   = ProgressManager.getLastLevelId();
   const totalRepaired = GameStateManager.get('totalRepaired');
-  const btnContinue  = document.getElementById('btn-continue');
-  const btnStart     = document.getElementById('btn-start');
-  const repairedEl   = document.getElementById('start-repaired');
+  const btnContinue   = document.getElementById('btn-continue');
+  const btnStart      = document.getElementById('btn-start');
+  const btnClear      = document.getElementById('btn-clear-history');
+  const repairedEl    = document.getElementById('start-repaired');
 
   // Mostrar "Continuar" si hay progreso guardado
   if (lastLevelId) {
@@ -53,10 +55,11 @@ function _setupStartScreen() {
     }
   }
 
-  // Mostrar sistemas reparados si hay alguno
+  // Mostrar sistemas reparados y botón de borrar si hay alguno
   if (totalRepaired > 0) {
-    repairedEl.style.display  = 'block';
-    repairedEl.textContent    = `Sistemas reparados: ${totalRepaired}`;
+    repairedEl.style.display = 'block';
+    repairedEl.textContent   = `Sistemas reparados: ${totalRepaired}`;
+    btnClear.style.display   = 'inline-block';
   }
 
   btnContinue.addEventListener('click', () => {
@@ -67,6 +70,23 @@ function _setupStartScreen() {
   btnStart.addEventListener('click', () => {
     _renderMap();
     ScreenManager.show('map');
+  });
+
+  btnClear.addEventListener('click', () => {
+    if (!confirm('¿Borrar todo el progreso? Esta acción no se puede deshacer.')) return;
+    ProgressManager.clear();
+    // Reiniciar estado en memoria
+    GameStateManager.set('unlockedLevels', ['level_01']);
+    GameStateManager.set('performanceMetrics', {});
+    GameStateManager.set('totalRepaired', 0);
+    GameStateManager.set('currentLevelId', null);
+    // Refrescar pantalla de inicio
+    btnContinue.style.display = 'none';
+    btnStart.textContent      = 'Nueva misión';
+    btnStart.className        = 'btn btn--primary';
+    repairedEl.style.display  = 'none';
+    btnClear.style.display    = 'none';
+    FeedbackController.showMessage('Progreso borrado', 'info');
   });
 }
 
@@ -190,8 +210,9 @@ function _renderPatternLevel(level, body) {
 function _buildPatternSlots(level) {
   const container    = document.getElementById('slots-container');
   const attribute    = level.rule.attributes[0];
-  const capAttr      = attribute.charAt(0).toUpperCase() + attribute.slice(1);
-  const goal         = level.goal[`expected${capAttr}s`];
+  const sequence     = level.rule.sequence;
+  // Generar la secuencia completa cíclicamente a partir de rule.sequence
+  const goal         = Array.from({ length: level.slots }, (_, i) => sequence[i % sequence.length]);
   const emptySlots   = level.emptySlots ?? level.slots;
   const prefillCount = level.slots - emptySlots;
 
