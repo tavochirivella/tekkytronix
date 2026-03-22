@@ -1,0 +1,86 @@
+[
+  {
+    "id": "level_01",
+    "title": "Órbita Roja y Azul",
+    "type": "pattern",
+    "mechanic": "drag_drop",
+    "theme": "planets",
+    "difficulty": 1,
+    "rule": {
+      "kind": "alternation",
+      "attributes": ["color"],
+      "sequence": ["red", "blue"]
+    },
+    "slots": 6,
+    "availableItems": [
+      { "id": "p_red_1", "color": "red", "label": "Planeta Rojo" },
+      { "id": "p_blue_1", "color": "blue", "label": "Planeta Azul" },
+      { "id": "p_red_2", "color": "red", "label": "Planeta Rojo" },
+      { "id": "p_blue_2", "color": "blue", "label": "Planeta Azul" },
+      { "id": "p_red_3", "color": "red", "label": "Planeta Rojo" },
+      { "id": "p_blue_3", "color": "blue", "label": "Planeta Azul" }
+    ],
+    "goal": {
+      "expectedColors": ["red", "blue", "red", "blue", "red", "blue"]
+    },
+    "feedbackProfile": "basic",
+    "transferVariant": false,
+    "hint": "Los planetas se repiten siguiendo un orden fijo."
+  },
+  {
+    "id": "level_02",
+    "title": "Señales del Sistema",
+    "type": "pattern",
+    "mechanic": "drag_drop",
+    "theme": "symbols",
+    "difficulty": 1,
+    "rule": {
+      "kind": "alternation",
+      "attributes": ["shape"],
+      "sequence": ["circle", "triangle"]
+    },
+    "slots": 6,
+    "availableItems": [
+      { "id": "s_circle_1", "shape": "circle", "label": "Señal Circular" },
+      { "id": "s_triangle_1", "shape": "triangle", "label": "Señal Triangular" },
+      { "id": "s_circle_2", "shape": "circle", "label": "Señal Circular" },
+      { "id": "s_triangle_2", "shape": "triangle", "label": "Señal Triangular" },
+      { "id": "s_circle_3", "shape": "circle", "label": "Señal Circular" },
+      { "id": "s_triangle_3", "shape": "triangle", "label": "Señal Triangular" }
+    ],
+    "goal": {
+      "expectedShapes": ["circle", "triangle", "circle", "triangle", "circle", "triangle"]
+    },
+    "feedbackProfile": "basic",
+    "transferVariant": true,
+    "hint": "Las señales siguen el mismo tipo de orden que los planetas."
+  },
+  {
+    "id": "level_03",
+    "title": "Red de Energía",
+    "type": "pattern",
+    "mechanic": "drag_drop",
+    "theme": "robots",
+    "difficulty": 2,
+    "rule": {
+      "kind": "group",
+      "attributes": ["color"],
+      "sequence": ["yellow", "yellow", "purple"]
+    },
+    "slots": 6,
+    "availableItems": [
+      { "id": "r_yellow_1", "color": "yellow", "label": "Robot Amarillo" },
+      { "id": "r_yellow_2", "color": "yellow", "label": "Robot Amarillo" },
+      { "id": "r_purple_1", "color": "purple", "label": "Robot Púrpura" },
+      { "id": "r_yellow_3", "color": "yellow", "label": "Robot Amarillo" },
+      { "id": "r_yellow_4", "color": "yellow", "label": "Robot Amarillo" },
+      { "id": "r_purple_2", "color": "purple", "label": "Robot Púrpura" }
+    ],
+    "goal": {
+      "expectedColors": ["yellow", "yellow", "purple", "yellow", "yellow", "purple"]
+    },
+    "feedbackProfile": "basic",
+    "transferVariant": true,
+    "hint": "El patrón se repite en grupos de tres."
+  }
+]

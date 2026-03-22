@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tekkytronix</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- PANTALLA: Inicio -->
+  <div id="screen-start" class="screen screen--active">
+    <div class="start__content">
+      <h1 class="start__title">TEKKYTRONIX</h1>
+      <p class="start__subtitle">Repara los sistemas del universo</p>
+      <button id="btn-start" class="btn btn--primary">Iniciar misión</button>
+    </div>
+  </div>
+
+  <!-- PANTALLA: Nivel -->
+  <div id="screen-level" class="screen screen--hidden">
+    <header class="level__header">
+      <span id="level-title" class="level__title"></span>
+      <span id="level-counter" class="level__counter"></span>
+    </header>
+
+    <div class="level__body">
+      <!-- Zona de slots (respuesta del jugador) -->
+      <section class="level__slots-section">
+        <p class="level__instruction">Completa el patrón arrastrando los elementos:</p>
+        <div id="slots-container" class="slots-container"></div>
+      </section>
+
+      <!-- Zona de items disponibles -->
+      <section class="level__items-section">
+        <p class="level__instruction">Elementos disponibles:</p>
+        <div id="items-container" class="items-container"></div>
+      </section>
+    </div>
+
+    <footer class="level__footer">
+      <button id="btn-check" class="btn btn--check">Verificar</button>
+      <button id="btn-reset" class="btn btn--reset">Reiniciar</button>
+    </footer>
+  </div>
+
+  <!-- PANTALLA: Nivel completado -->
+  <div id="screen-feedback" class="screen screen--hidden">
+    <div class="feedback__content">
+      <div class="feedback__icon">✦</div>
+      <h2 class="feedback__title">¡Sistema reparado!</h2>
+      <p id="feedback-stats" class="feedback__stats"></p>
+      <button id="btn-next" class="btn btn--primary">Siguiente sistema</button>
+      <button id="btn-replay" class="btn btn--secondary">Jugar de nuevo</button>
+    </div>
+  </div>
+
+  <!-- Utilidades (orden importa) -->
+  <script src="src/utils/storage.js"></script>
+  <script src="src/utils/constants.js"></script>
+  <script src="src/utils/helpers.js"></script>
+
+  <!-- Core -->
+  <script src="src/core/event-bus.js"></script>
+  <script src="src/core/game-state.js"></script>
+  <script src="src/core/level-repository.js"></script>
+  <script src="src/core/progress-manager.js"></script>
+
+  <!-- Gameplay -->
+  <script src="src/gameplay/pattern-validator.js"></script>
+  <script src="src/core/rule-engine.js"></script>
+
+  <!-- UI -->
+  <script src="src/ui/screen-manager.js"></script>
+  <script src="src/ui/feedback-controller.js"></script>
+
+  <!-- Entry point -->
+  <script src="main.js"></script>
+</body>
+</html>

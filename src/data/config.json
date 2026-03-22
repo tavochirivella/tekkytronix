@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "game": {
+    "title": "Tekkytronix",
+    "totalLevels": 3,
+    "defaultAudio": true
+  },
+  "difficulty": {
+    "failsToDecrease": 3,
+    "successToIncrease": 2
+  },
+  "feedback": {
+    "correctDuration": 1500,
+    "incorrectDuration": 800,
+    "patternRevealDelay": 400
+  },
+  "storage": {
+    "key": "tekkytronix_save",
+    "version": 1
+  }
+}
