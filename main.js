@@ -15,14 +15,14 @@ let _slots = [];        // Array de { el, itemId | null }
 let _draggedItemId = null;
 
 // ===== INIT =====
-async function init() {
+function init() {
   _registerScreens();
   _bindStartScreen();
 
   const saved = ProgressManager.load();
   ProgressManager.applyToState(saved);
 
-  await LevelRepository.load();
+  LevelRepository.load();
 
   ScreenManager.show(CONSTANTS.SCREENS.START);
 }

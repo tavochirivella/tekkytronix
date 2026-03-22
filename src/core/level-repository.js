@@ -2,17 +2,14 @@ const LevelRepository = (() => {
   let _levels = [];
   let _loaded = false;
 
-  async function load() {
+  function load() {
     if (_loaded) return;
-    try {
-      const response = await fetch('./src/data/levels.json');
-      if (!response.ok) throw new Error('No se pudo cargar levels.json');
-      _levels = await response.json();
-      _loaded = true;
-    } catch (err) {
-      console.error('[LevelRepository] Error cargando niveles:', err);
-      _levels = [];
+    if (typeof LEVELS_DATA === 'undefined') {
+      console.error('[LevelRepository] LEVELS_DATA no está definido. Verifica que levels.js está incluido.');
+      return;
     }
+    _levels = LEVELS_DATA;
+    _loaded = true;
   }
 
   function getById(id) {
