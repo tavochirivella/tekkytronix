@@ -1,6 +1,7 @@
 const RuleEngine = (() => {
   const _validators = {
-    pattern: PatternValidator
+    pattern:        PatternValidator,
+    classification: ClassificationValidator
   };
 
   function evaluate(level, playerAnswer) {

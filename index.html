@@ -17,25 +17,28 @@
     </div>
   </div>
 
+  <!-- PANTALLA: Mapa de galaxia -->
+  <div id="screen-map" class="screen screen--hidden">
+    <header class="map__header">
+      <h2 class="map__title">Mapa Galáctico</h2>
+      <p class="map__subtitle">Selecciona un sistema para reparar</p>
+    </header>
+    <div id="map-nodes" class="map__nodes"></div>
+  </div>
+
   <!-- PANTALLA: Nivel -->
   <div id="screen-level" class="screen screen--hidden">
     <header class="level__header">
+      <button id="btn-back-map" class="btn btn--icon" title="Volver al mapa">←</button>
       <span id="level-title" class="level__title"></span>
-      <span id="level-counter" class="level__counter"></span>
+      <div class="level__hud">
+        <span id="hud-attempts" class="hud-item">Intentos: 0</span>
+        <span id="hud-timer" class="hud-item">0s</span>
+      </div>
     </header>
 
-    <div class="level__body">
-      <!-- Zona de slots (respuesta del jugador) -->
-      <section class="level__slots-section">
-        <p class="level__instruction">Completa el patrón arrastrando los elementos:</p>
-        <div id="slots-container" class="slots-container"></div>
-      </section>
-
-      <!-- Zona de items disponibles -->
-      <section class="level__items-section">
-        <p class="level__instruction">Elementos disponibles:</p>
-        <div id="items-container" class="items-container"></div>
-      </section>
+    <div class="level__body" id="level-body">
+      <!-- Se renderiza dinámicamente según el tipo de nivel -->
     </div>
 
     <footer class="level__footer">
@@ -51,7 +54,7 @@
       <h2 class="feedback__title">¡Sistema reparado!</h2>
       <p id="feedback-stats" class="feedback__stats"></p>
       <button id="btn-next" class="btn btn--primary">Siguiente sistema</button>
-      <button id="btn-replay" class="btn btn--secondary">Jugar de nuevo</button>
+      <button id="btn-map" class="btn btn--secondary">Ver mapa</button>
     </div>
   </div>
 
@@ -71,11 +74,13 @@
 
   <!-- Gameplay -->
   <script src="src/gameplay/pattern-validator.js"></script>
+  <script src="src/gameplay/classification-validator.js"></script>
   <script src="src/core/rule-engine.js"></script>
 
   <!-- UI -->
   <script src="src/ui/screen-manager.js"></script>
   <script src="src/ui/feedback-controller.js"></script>
+  <script src="src/ui/hud.js"></script>
 
   <!-- Entry point -->
   <script src="main.js"></script>

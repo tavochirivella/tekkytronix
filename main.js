@@ -1,18 +1,17 @@
 // ===== TEKKYTRONIX — main.js =====
-// Vertical Slice: Fase 1
+// Fase 2: Mapa, clasificación, HUD
 
-// Emojis por tema y atributo
 const ITEM_VISUALS = {
   planets: { red: '🔴', blue: '🔵', yellow: '🟡', purple: '🟣' },
   symbols: { circle: '⭕', triangle: '🔺' },
-  robots:  { red: '🤖', blue: '🤖', yellow: '🤖', purple: '🤖' }
+  robots:  { red: '🔴', blue: '🔵', yellow: '🟡', purple: '🟣' }
 };
 
-const ROBOT_COLORS = { yellow: '🟡', purple: '🟣' };
-
-let _currentLevel = null;
-let _slots = [];        // Array de { el, itemId | null }
-let _draggedItemId = null;
+let _currentLevel   = null;
+let _slots          = [];   // patrón: [{ el, itemId, itemData }]
+let _categories     = {};   // clasificación: { catId: [itemId, ...] }
+let _draggedItemId  = null;
+let _draggedFromCat = null; // para devolver al banco desde categoría
 
 // ===== INIT =====
 function init() {
@@ -24,50 +23,131 @@ function init() {
 
   LevelRepository.load();
 
-  ScreenManager.show(CONSTANTS.SCREENS.START);
+  ScreenManager.show('start');
 }
 
 function _registerScreens() {
-  ScreenManager.register(CONSTANTS.SCREENS.START,    document.getElementById('screen-start'));
-  ScreenManager.register(CONSTANTS.SCREENS.LEVEL,    document.getElementById('screen-level'));
-  ScreenManager.register(CONSTANTS.SCREENS.FEEDBACK, document.getElementById('screen-feedback'));
+  ScreenManager.register('start',    document.getElementById('screen-start'));
+  ScreenManager.register('map',      document.getElementById('screen-map'));
+  ScreenManager.register('level',    document.getElementById('screen-level'));
+  ScreenManager.register('feedback', document.getElementById('screen-feedback'));
 }
 
 // ===== START SCREEN =====
 function _bindStartScreen() {
   document.getElementById('btn-start').addEventListener('click', () => {
-    const unlocked = GameStateManager.get('unlockedLevels');
-    _loadLevel(unlocked[0]);
+    _renderMap();
+    ScreenManager.show('map');
+  });
+}
+
+// ===== MAP SCREEN =====
+function _renderMap() {
+  const container = document.getElementById('map-nodes');
+  container.innerHTML = '';
+
+  const allLevels    = LevelRepository.getAll();
+  const unlocked     = GameStateManager.get('unlockedLevels');
+  const metrics      = GameStateManager.get('performanceMetrics');
+  const sectors      = [...new Set(allLevels.map(l => l.sector))];
+
+  sectors.forEach(sector => {
+    const sectorEl = document.createElement('div');
+    sectorEl.className = 'map__sector';
+
+    const sectorTitle = document.createElement('p');
+    sectorTitle.className = 'map__sector-title';
+    sectorTitle.textContent = `Sector ${sector}`;
+    sectorEl.appendChild(sectorTitle);
+
+    const nodesRow = document.createElement('div');
+    nodesRow.className = 'map__sector-nodes';
+
+    allLevels.filter(l => l.sector === sector).forEach(level => {
+      const isUnlocked  = unlocked.includes(level.id);
+      const isCompleted = !!metrics[level.id];
+      const index       = LevelRepository.getAll().findIndex(l => l.id === level.id) + 1;
+
+      const node = document.createElement('button');
+      node.className = `map-node ${isCompleted ? 'map-node--done' : ''} ${!isUnlocked ? 'map-node--locked' : ''}`;
+      node.disabled  = !isUnlocked;
+      node.innerHTML = `
+        <span class="map-node__number">${index}</span>
+        <span class="map-node__label">${level.title}</span>
+        ${isCompleted ? '<span class="map-node__star">✦</span>' : ''}
+        ${!isUnlocked ? '<span class="map-node__lock">🔒</span>' : ''}
+      `;
+
+      if (isUnlocked) {
+        node.addEventListener('click', () => _loadLevel(level.id));
+      }
+
+      nodesRow.appendChild(node);
+    });
+
+    sectorEl.appendChild(nodesRow);
+    container.appendChild(sectorEl);
   });
 }
 
 // ===== LEVEL =====
 function _loadLevel(levelId) {
   const level = LevelRepository.getById(levelId);
-  if (!level) {
-    FeedbackController.showMessage('Error cargando nivel', 'error');
-    return;
-  }
+  if (!level) { FeedbackController.showMessage('Error cargando nivel', 'error'); return; }
 
-  _currentLevel = level;
+  _currentLevel  = level;
+  _slots         = [];
+  _categories    = {};
+  _draggedItemId = null;
+
   GameStateManager.resetForLevel(levelId);
-  GameStateManager.startTimer();
+  HUD.resetTimer();
+  HUD.setAttempts(0);
+  HUD.startTimer();
 
   _renderLevel(level);
-  ScreenManager.show(CONSTANTS.SCREENS.LEVEL);
+  ScreenManager.show('level');
 }
 
 function _renderLevel(level) {
   document.getElementById('level-title').textContent = level.title;
-  document.getElementById('level-counter').textContent = `Nivel ${_getLevelIndex(level.id) + 1}`;
 
-  _renderSlots(level);
-  _renderItems(level);
+  // Botón volver al mapa
+  const btnBack = document.getElementById('btn-back-map');
+  btnBack.replaceWith(btnBack.cloneNode(true));
+  document.getElementById('btn-back-map').addEventListener('click', () => {
+    HUD.stopTimer();
+    _renderMap();
+    ScreenManager.show('map');
+  });
+
+  const body = document.getElementById('level-body');
+  body.innerHTML = '';
+
+  if (level.type === 'pattern') {
+    _renderPatternLevel(level, body);
+  } else if (level.type === 'classification') {
+    _renderClassificationLevel(level, body);
+  }
+
   _bindLevelButtons(level);
 }
 
-function _getLevelIndex(levelId) {
-  return LevelRepository.getAll().findIndex(l => l.id === levelId);
+// ─── PATRÓN ───────────────────────────────────────────────
+function _renderPatternLevel(level, body) {
+  body.innerHTML = `
+    <section class="level__slots-section">
+      <p class="level__instruction">Completa el patrón arrastrando los elementos:</p>
+      <div id="slots-container" class="slots-container"></div>
+    </section>
+    <section class="level__items-section">
+      <p class="level__instruction">Elementos disponibles:</p>
+      <div id="items-container" class="items-container"></div>
+    </section>
+  `;
+
+  _renderSlots(level);
+  _renderItemBank(level.availableItems, level.theme, 'items-container');
 }
 
 function _renderSlots(level) {
@@ -77,134 +157,250 @@ function _renderSlots(level) {
 
   for (let i = 0; i < level.slots; i++) {
     const el = document.createElement('div');
-    el.className = 'slot';
+    el.className    = 'slot';
     el.dataset.index = i;
-
     _bindSlotDrop(el, i);
     container.appendChild(el);
     _slots.push({ el, itemId: null, itemData: null });
   }
 }
 
-function _renderItems(level) {
-  const container = document.getElementById('items-container');
-  container.innerHTML = '';
+// ─── CLASIFICACIÓN ────────────────────────────────────────
+function _renderClassificationLevel(level, body) {
+  const catsHtml = level.categories.map(cat => {
+    const colorAttr = cat.color || cat.shape || '';
+    return `
+      <div class="cat-zone cat-zone--${colorAttr}" id="cat-${cat.id}" data-cat-id="${cat.id}">
+        <p class="cat-zone__label">${cat.label}</p>
+        <div class="cat-zone__items" id="cat-items-${cat.id}"></div>
+      </div>
+    `;
+  }).join('');
 
-  const shuffled = Helpers.shuffle(level.availableItems);
+  body.innerHTML = `
+    <section class="level__cats-section">
+      <p class="level__instruction">Arrastra cada elemento a su zona:</p>
+      <div class="cats-container">${catsHtml}</div>
+    </section>
+    <section class="level__items-section">
+      <p class="level__instruction">Elementos para clasificar:</p>
+      <div id="items-container" class="items-container"></div>
+    </section>
+  `;
 
-  shuffled.forEach(item => {
-    const el = _createItemElement(item, level.theme);
-    container.appendChild(el);
+  level.categories.forEach(cat => {
+    _categories[cat.id] = [];
+    const zoneEl = document.getElementById(`cat-${cat.id}`);
+    _bindCategoryDrop(zoneEl, cat.id);
+  });
+
+  _renderItemBank(level.availableItems, level.theme, 'items-container');
+}
+
+function _bindCategoryDrop(zoneEl, catId) {
+  zoneEl.addEventListener('dragover', e => { e.preventDefault(); zoneEl.classList.add('drag-over'); });
+  zoneEl.addEventListener('dragleave', () => zoneEl.classList.remove('drag-over'));
+  zoneEl.addEventListener('drop', e => {
+    e.preventDefault();
+    zoneEl.classList.remove('drag-over');
+    if (_draggedItemId) _placeItemInCategory(catId, _draggedItemId);
+  });
+  // Touch
+  zoneEl.addEventListener('touchend', e => {
+    const touch  = e.changedTouches[0];
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (zoneEl.contains(target) && _draggedItemId) {
+      _placeItemInCategory(catId, _draggedItemId);
+    }
   });
 }
 
-function _createItemElement(item, theme) {
-  const el = document.createElement('div');
-  el.className = 'item';
-  el.dataset.itemId = item.id;
-  el.title = item.label;
+function _placeItemInCategory(catId, itemId) {
+  const level    = _currentLevel;
+  const itemData = level.availableItems.find(i => i.id === itemId);
+  if (!itemData) return;
 
-  // Color class
+  // Retirar de categoría anterior si aplica
+  if (_draggedFromCat && _draggedFromCat !== catId) {
+    _categories[_draggedFromCat] = _categories[_draggedFromCat].filter(id => id !== itemId);
+    const prevZoneItems = document.getElementById(`cat-items-${_draggedFromCat}`);
+    const prevEl = prevZoneItems?.querySelector(`[data-item-id="${itemId}"]`);
+    prevEl?.remove();
+  }
+
+  // Evitar duplicados
+  if (_categories[catId].includes(itemId)) return;
+
+  _categories[catId].push(itemId);
+
+  // Renderizar en la zona
+  const zoneItemsEl = document.getElementById(`cat-items-${catId}`);
+  const itemEl = _createItemElement(itemData, level.theme, true);
+  itemEl.addEventListener('click', () => _removeFromCategory(catId, itemId, itemEl));
+  zoneItemsEl.appendChild(itemEl);
+
+  // Ocultar del banco
+  const bankEl = document.querySelector(`#items-container [data-item-id="${itemId}"]`);
+  if (bankEl) bankEl.classList.add('used');
+
+  _draggedFromCat = null;
+}
+
+function _removeFromCategory(catId, itemId, itemEl) {
+  _categories[catId] = _categories[catId].filter(id => id !== itemId);
+  itemEl.remove();
+  const bankEl = document.querySelector(`#items-container [data-item-id="${itemId}"]`);
+  if (bankEl) bankEl.classList.remove('used');
+}
+
+// ─── BANCO DE ITEMS (compartido) ──────────────────────────
+function _renderItemBank(items, theme, containerId) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  const shuffled = Helpers.shuffle(items);
+  shuffled.forEach(item => container.appendChild(_createItemElement(item, theme, false)));
+}
+
+function _createItemElement(item, theme, inCategory) {
+  const el = document.createElement('div');
+  el.className      = 'item';
+  el.dataset.itemId = item.id;
+  el.title          = item.label;
+
   const colorAttr = item.color || item.shape;
   if (colorAttr) el.classList.add(`item--${colorAttr}`);
-
-  // Shape class
   if (item.shape) el.classList.add(`item--${item.shape}`);
 
-  // Emoji visual
   el.textContent = _getItemEmoji(item, theme);
 
-  // Drag events
-  el.setAttribute('draggable', 'true');
-  el.addEventListener('dragstart', e => _onDragStart(e, item));
-  el.addEventListener('dragend',   e => _onDragEnd(e));
+  if (!inCategory) {
+    el.setAttribute('draggable', 'true');
+    el.addEventListener('dragstart', e => { _draggedItemId = item.id; _draggedFromCat = null; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+    el.addEventListener('dragend',   () => { el.classList.remove('dragging'); _draggedItemId = null; });
+    _bindTouchDrag(el, item);
 
-  // Touch events
-  _bindTouchDrag(el, item);
+    // Para patrón: drop en slot por click también
+    if (_currentLevel?.type === 'pattern') {
+      el.addEventListener('click', () => {
+        const emptySlot = _slots.findIndex(s => !s.itemId);
+        if (emptySlot !== -1) _placeItemInSlot(emptySlot, item.id);
+      });
+    }
+  } else {
+    // Item dentro de categoría: más pequeño, sin cursor grab
+    el.style.cursor = 'pointer';
+    el.title = `${item.label} (clic para devolver)`;
+    el.setAttribute('draggable', 'true');
+    el.addEventListener('dragstart', e => {
+      _draggedItemId  = item.id;
+      _draggedFromCat = Object.keys(_categories).find(cid => _categories[cid].includes(item.id)) || null;
+      e.dataTransfer.effectAllowed = 'move';
+    });
+  }
 
   return el;
 }
 
 function _getItemEmoji(item, theme) {
-  if (theme === 'robots') {
-    return ROBOT_COLORS[item.color] || '🤖';
-  }
   const map = ITEM_VISUALS[theme];
   if (!map) return '●';
   return map[item.color] || map[item.shape] || '●';
 }
 
-// ===== DRAG & DROP (mouse) =====
-function _onDragStart(e, item) {
-  _draggedItemId = item.id;
-  e.currentTarget.classList.add('dragging');
-  e.dataTransfer.effectAllowed = 'move';
-}
-
-function _onDragEnd(e) {
-  e.currentTarget.classList.remove('dragging');
-  _draggedItemId = null;
-}
-
+// ─── SLOTS (patrón) ───────────────────────────────────────
 function _bindSlotDrop(el, index) {
-  el.addEventListener('dragover', e => {
-    e.preventDefault();
-    el.classList.add('drag-over');
-  });
-
-  el.addEventListener('dragleave', () => {
-    el.classList.remove('drag-over');
-  });
-
+  el.addEventListener('dragover',  e => { e.preventDefault(); el.classList.add('drag-over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
   el.addEventListener('drop', e => {
     e.preventDefault();
     el.classList.remove('drag-over');
     if (_draggedItemId) _placeItemInSlot(index, _draggedItemId);
   });
+  el.addEventListener('click', () => _removeFromSlot(index));
 }
 
-// ===== TOUCH DRAG =====
+function _placeItemInSlot(slotIndex, itemId) {
+  const level    = _currentLevel;
+  const itemData = level.availableItems.find(i => i.id === itemId);
+  if (!itemData) return;
+
+  const prevItem = _slots[slotIndex].itemId;
+  if (prevItem) _returnItemToBank(prevItem);
+
+  const prevSlot = _slots.findIndex(s => s.itemId === itemId);
+  if (prevSlot !== -1 && prevSlot !== slotIndex) {
+    _slots[prevSlot] = { ..._slots[prevSlot], itemId: null, itemData: null };
+    _renderSlotContent(prevSlot, null, level.theme);
+  }
+
+  _slots[slotIndex].itemId   = itemId;
+  _slots[slotIndex].itemData = itemData;
+  _renderSlotContent(slotIndex, itemData, level.theme);
+  _markItemUsed(itemId);
+}
+
+function _removeFromSlot(slotIndex) {
+  const itemId = _slots[slotIndex].itemId;
+  if (!itemId) return;
+  _slots[slotIndex].itemId   = null;
+  _slots[slotIndex].itemData = null;
+  _renderSlotContent(slotIndex, null, _currentLevel.theme);
+  _returnItemToBank(itemId);
+}
+
+function _renderSlotContent(slotIndex, itemData, theme) {
+  const slotEl = _slots[slotIndex].el;
+  slotEl.innerHTML = '';
+  slotEl.classList.remove('slot--correct', 'slot--incorrect');
+  if (!itemData) return;
+
+  const inner = _createItemElement(itemData, theme, true);
+  inner.style.cssText = 'cursor:default;width:100%;height:100%;border:none;background:transparent;pointer-events:none;';
+  slotEl.appendChild(inner);
+}
+
+function _markItemUsed(itemId) {
+  document.querySelector(`#items-container [data-item-id="${itemId}"]`)?.classList.add('used');
+}
+
+function _returnItemToBank(itemId) {
+  document.querySelector(`#items-container [data-item-id="${itemId}"]`)?.classList.remove('used');
+}
+
+// ─── TOUCH DRAG ───────────────────────────────────────────
 function _bindTouchDrag(el, item) {
   let clone = null;
-  let originSlotIndex = null;
 
   el.addEventListener('touchstart', e => {
-    _draggedItemId = item.id;
+    _draggedItemId  = item.id;
+    _draggedFromCat = Object.keys(_categories).find(cid => _categories[cid].includes(item.id)) || null;
     el.classList.add('dragging');
-
     clone = el.cloneNode(true);
-    clone.style.cssText = `
-      position: fixed; pointer-events: none; z-index: 1000;
-      opacity: 0.85; transform: scale(1.1);
-      width: ${el.offsetWidth}px; height: ${el.offsetHeight}px;
-    `;
+    clone.style.cssText = `position:fixed;pointer-events:none;z-index:1000;opacity:0.85;transform:scale(1.1);width:${el.offsetWidth}px;height:${el.offsetHeight}px;`;
     document.body.appendChild(clone);
     _moveClone(clone, e.touches[0]);
-
-    // Detectar si viene de un slot
-    originSlotIndex = _slots.findIndex(s => s.itemId === item.id);
   }, { passive: true });
 
   el.addEventListener('touchmove', e => {
     e.preventDefault();
     if (clone) _moveClone(clone, e.touches[0]);
-    _highlightSlotUnder(e.touches[0]);
+    _highlightTargetUnder(e.touches[0]);
   }, { passive: false });
 
   el.addEventListener('touchend', e => {
     el.classList.remove('dragging');
-    if (clone) { clone.remove(); clone = null; }
-    _clearSlotHighlights();
+    clone?.remove(); clone = null;
+    _clearHighlights();
 
-    const touch = e.changedTouches[0];
+    const touch  = e.changedTouches[0];
     const target = document.elementFromPoint(touch.clientX, touch.clientY);
-    const slotEl = target?.closest('.slot');
 
-    if (slotEl) {
-      const index = parseInt(slotEl.dataset.index);
-      _placeItemInSlot(index, _draggedItemId);
-    } else if (originSlotIndex !== -1 && originSlotIndex !== undefined) {
-      // Si venía de un slot y no cayó en ninguno, devolver
+    if (_currentLevel?.type === 'pattern') {
+      const slotEl = target?.closest('.slot');
+      if (slotEl) _placeItemInSlot(parseInt(slotEl.dataset.index), _draggedItemId);
+    } else if (_currentLevel?.type === 'classification') {
+      const zoneEl = target?.closest('.cat-zone');
+      if (zoneEl) _placeItemInCategory(zoneEl.dataset.catId, _draggedItemId);
     }
 
     _draggedItemId = null;
@@ -216,172 +412,146 @@ function _moveClone(clone, touch) {
   clone.style.top  = `${touch.clientY - 40}px`;
 }
 
-function _highlightSlotUnder(touch) {
-  _slots.forEach(({ el }) => el.classList.remove('drag-over'));
-  const target = document.elementFromPoint(touch.clientX, touch.clientY);
-  const slotEl = target?.closest('.slot');
-  if (slotEl) slotEl.classList.add('drag-over');
+function _highlightTargetUnder(touch) {
+  document.querySelectorAll('.slot, .cat-zone').forEach(el => el.classList.remove('drag-over'));
+  const target  = document.elementFromPoint(touch.clientX, touch.clientY);
+  const slotEl  = target?.closest('.slot');
+  const zoneEl  = target?.closest('.cat-zone');
+  (slotEl || zoneEl)?.classList.add('drag-over');
 }
 
-function _clearSlotHighlights() {
-  _slots.forEach(({ el }) => el.classList.remove('drag-over'));
+function _clearHighlights() {
+  document.querySelectorAll('.slot, .cat-zone').forEach(el => el.classList.remove('drag-over'));
 }
 
-// ===== PLACE ITEM =====
-function _placeItemInSlot(slotIndex, itemId) {
-  const level = _currentLevel;
-  const itemData = level.availableItems.find(i => i.id === itemId);
-  if (!itemData) return;
-
-  // Si el slot ya tenía un item, devolver el anterior
-  const prevItem = _slots[slotIndex].itemId;
-  if (prevItem) _returnItemToBank(prevItem);
-
-  // Si el item ya estaba en otro slot, limpiar ese slot
-  const prevSlot = _slots.findIndex(s => s.itemId === itemId);
-  if (prevSlot !== -1 && prevSlot !== slotIndex) {
-    _slots[prevSlot].itemId = null;
-    _slots[prevSlot].itemData = null;
-    _renderSlotContent(prevSlot, null, null, level.theme);
-  }
-
-  _slots[slotIndex].itemId = itemId;
-  _slots[slotIndex].itemData = itemData;
-  _renderSlotContent(slotIndex, itemData, itemId, level.theme);
-
-  // Marcar item como usado en el banco
-  _markItemUsed(itemId);
-}
-
-function _renderSlotContent(slotIndex, itemData, itemId, theme) {
-  const slotEl = _slots[slotIndex].el;
-  slotEl.innerHTML = '';
-  slotEl.classList.remove('slot--correct', 'slot--incorrect');
-
-  if (!itemData) return;
-
-  const inner = document.createElement('div');
-  inner.className = 'item';
-  const colorAttr = itemData.color || itemData.shape;
-  if (colorAttr) inner.classList.add(`item--${colorAttr}`);
-  if (itemData.shape) inner.classList.add(`item--${itemData.shape}`);
-  inner.textContent = _getItemEmoji(itemData, theme);
-  inner.style.cursor = 'default';
-  inner.style.width = '100%';
-  inner.style.height = '100%';
-  inner.style.border = 'none';
-  inner.style.background = 'transparent';
-
-  // Click para devolver al banco
-  slotEl.addEventListener('click', () => _removeFromSlot(slotIndex), { once: true });
-
-  slotEl.appendChild(inner);
-}
-
-function _markItemUsed(itemId) {
-  const el = document.querySelector(`[data-item-id="${itemId}"]`);
-  if (el) el.classList.add('used');
-}
-
-function _returnItemToBank(itemId) {
-  const el = document.querySelector(`[data-item-id="${itemId}"]`);
-  if (el) el.classList.remove('used');
-}
-
-function _removeFromSlot(slotIndex) {
-  const itemId = _slots[slotIndex].itemId;
-  if (!itemId) return;
-  _slots[slotIndex].itemId = null;
-  _slots[slotIndex].itemData = null;
-  _renderSlotContent(slotIndex, null, null, _currentLevel.theme);
-  _returnItemToBank(itemId);
-}
-
-// ===== CHECK =====
+// ─── CHECK ────────────────────────────────────────────────
 function _check() {
   const level = _currentLevel;
-  const attribute = level.rule.attributes[0];
+  GameStateManager.incrementAttempts();
+  const attempts = GameStateManager.get('attempts');
+  HUD.setAttempts(attempts);
 
-  // Construir la respuesta del jugador
-  const playerAnswer = _slots.map(s => {
-    if (!s.itemData) return null;
-    return s.itemData[attribute];
-  });
+  let result;
+  let slotEls = [];
 
-  // Validar que todos los slots estén llenos
-  if (playerAnswer.includes(null)) {
-    FeedbackController.showMessage('Completa todos los espacios', 'info');
-    return;
+  if (level.type === 'pattern') {
+    const attribute   = level.rule.attributes[0];
+    const playerAnswer = _slots.map(s => s.itemData ? s.itemData[attribute] : null);
+
+    if (playerAnswer.includes(null)) {
+      GameStateManager.set('attempts', attempts - 1);
+      HUD.setAttempts(attempts - 1);
+      FeedbackController.showMessage('Completa todos los espacios', 'info');
+      return;
+    }
+
+    result  = RuleEngine.evaluate(level, playerAnswer);
+    slotEls = _slots.map(s => s.el);
+
+  } else if (level.type === 'classification') {
+    const totalPlaced = Object.values(_categories).reduce((s, arr) => s + arr.length, 0);
+    if (totalPlaced < level.availableItems.length) {
+      GameStateManager.set('attempts', attempts - 1);
+      HUD.setAttempts(attempts - 1);
+      FeedbackController.showMessage('Clasifica todos los elementos', 'info');
+      return;
+    }
+
+    result = RuleEngine.evaluate(level, _categories);
   }
 
-  GameStateManager.incrementAttempts();
-
-  const result = RuleEngine.evaluate(level, playerAnswer);
-  const slotEls = _slots.map(s => s.el);
-
   if (result.correct) {
-    FeedbackController.showCorrect(slotEls);
+    HUD.stopTimer();
     const elapsed = GameStateManager.stopTimer();
-    const attempts = GameStateManager.get('attempts');
+
+    if (level.type === 'pattern') {
+      FeedbackController.showCorrect(slotEls);
+    } else {
+      FeedbackController.showMessage('¡Clasificación correcta!', 'success');
+      _highlightAllCategoriesCorrect();
+    }
+
     ProgressManager.recordLevelResult(level.id, attempts, elapsed);
 
     const nextId = LevelRepository.getNextId(level.id);
     if (nextId) GameStateManager.unlockLevel(nextId);
+    ProgressManager.saveFromState();
 
-    setTimeout(() => _showFeedbackScreen(attempts, elapsed, !!nextId), 1200);
+    setTimeout(() => _showFeedbackScreen(attempts, elapsed, !!nextId), 1400);
+
   } else {
-    FeedbackController.showIncorrect(slotEls, result.firstErrorIndex ?? 0);
+    if (level.type === 'pattern') {
+      FeedbackController.showIncorrect(slotEls, result.firstErrorIndex ?? 0);
+    } else {
+      _highlightCategoryError(result.wrongCategoryId);
+    }
     _showErrorHint(result.errorType);
   }
 }
 
+function _highlightAllCategoriesCorrect() {
+  document.querySelectorAll('.cat-zone').forEach(el => {
+    el.classList.add('cat-zone--correct');
+    setTimeout(() => el.classList.remove('cat-zone--correct'), 1400);
+  });
+}
+
+function _highlightCategoryError(catId) {
+  const el = document.getElementById(`cat-${catId}`);
+  if (!el) return;
+  el.classList.add('cat-zone--error');
+  setTimeout(() => el.classList.remove('cat-zone--error'), 800);
+}
+
 function _showErrorHint(errorType) {
   const messages = {
-    impulsive: 'Observa el patrón antes de actuar',
-    visual:    'Revisa bien la posición de cada elemento',
-    rule:      'Ese elemento no pertenece al patrón',
-    incomplete: 'Completa todos los espacios'
+    impulsive:  'Observa bien antes de actuar',
+    visual:     'Revisa la categoría de cada elemento',
+    rule:       'Ese elemento no pertenece ahí',
+    incomplete: 'Faltan elementos por clasificar'
   };
   FeedbackController.showMessage(messages[errorType] || 'Intenta de nuevo', 'error');
 }
 
-// ===== FEEDBACK SCREEN =====
+// ─── FEEDBACK SCREEN ──────────────────────────────────────
 function _showFeedbackScreen(attempts, elapsed, hasNext) {
-  const statsEl = document.getElementById('feedback-stats');
-  statsEl.textContent = `Intentos: ${attempts} · Tiempo: ${Helpers.formatTime(elapsed)}`;
+  document.getElementById('feedback-stats').textContent =
+    `Intentos: ${attempts} · Tiempo: ${Helpers.formatTime(elapsed)}`;
 
-  const btnNext   = document.getElementById('btn-next');
-  const btnReplay = document.getElementById('btn-replay');
+  const btnNext = document.getElementById('btn-next');
+  const btnMap  = document.getElementById('btn-map');
 
   btnNext.style.display = hasNext ? 'block' : 'none';
 
-  // Limpiar listeners previos
   btnNext.replaceWith(btnNext.cloneNode(true));
-  btnReplay.replaceWith(btnReplay.cloneNode(true));
+  btnMap.replaceWith(btnMap.cloneNode(true));
 
   document.getElementById('btn-next').addEventListener('click', () => {
     const nextId = LevelRepository.getNextId(_currentLevel.id);
     if (nextId) _loadLevel(nextId);
-    else ScreenManager.show(CONSTANTS.SCREENS.START);
   });
 
-  document.getElementById('btn-replay').addEventListener('click', () => {
-    _loadLevel(_currentLevel.id);
+  document.getElementById('btn-map').addEventListener('click', () => {
+    _renderMap();
+    ScreenManager.show('map');
   });
 
-  ScreenManager.show(CONSTANTS.SCREENS.FEEDBACK);
+  ScreenManager.show('feedback');
 }
 
-// ===== LEVEL BUTTONS =====
+// ─── LEVEL BUTTONS ────────────────────────────────────────
 function _bindLevelButtons(level) {
-  const btnCheck = document.getElementById('btn-check');
-  const btnReset = document.getElementById('btn-reset');
-
-  btnCheck.replaceWith(btnCheck.cloneNode(true));
-  btnReset.replaceWith(btnReset.cloneNode(true));
+  ['btn-check', 'btn-reset'].forEach(id => {
+    const el = document.getElementById(id);
+    el.replaceWith(el.cloneNode(true));
+  });
 
   document.getElementById('btn-check').addEventListener('click', _check);
-  document.getElementById('btn-reset').addEventListener('click', () => _loadLevel(level.id));
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    HUD.resetTimer();
+    HUD.setAttempts(0);
+    _loadLevel(level.id);
+  });
 }
 
 // ===== START =====
